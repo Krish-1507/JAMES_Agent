@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environments
+.env
+
+# JAMES runtime data
+workspace/
+data.txt
+output.txt
+Alarmtext.txt
+*.log
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Audio cache
+*.wav
+sounds/
+
+# User plugins (root folder is for community tools, not committed)
+/plugins/
+
+
+# Legacy personal scripts (pre-refactor) — kept locally, not in the repo
+james_legacy.py
+jamesUI.py
+jamesUI.ui
+backup.py
+alarm.py
+Alarmtext.txt
+offjames.py
+offlinejames.py
+keys.py
+data.txt
+output.txt
+*.docx

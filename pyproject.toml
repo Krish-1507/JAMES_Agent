@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "james-assistant"
+version = "0.1.0"
+description = "JAMES — an open-source, voice-first JARVIS that automates your computer with LLM agents and tools."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "JAMES Contributors" }]
+keywords = ["jarvis", "assistant", "voice", "agent", "llm", "automation", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S"
+Repository = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S"
+Issues = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/issues"
+
+[project.scripts]
+james = "james.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["james*"]

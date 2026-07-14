@@ -1,0 +1,14 @@
+site_name: JAMES — Voice Automated Desktop Agent
+site_description: An open-source, voice-first JARVIS that automates your computer with LLM agents and tools.
+repo_url: https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S
+theme:
+  name: material
+  palette:
+    primary: cyan
+nav:
+  - Home: index.md
+  - Tools: tools.md
+  - Plugins: plugins.md
+markdown_extensions:
+  - admonition
+  - codehilite
