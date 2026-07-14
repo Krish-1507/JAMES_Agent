@@ -215,6 +215,39 @@ james/
 
 The agent loop is simple and robust: it sends the conversation and tool schemas to the model; if the model returns tool calls, JAMES executes them, feeds the results back, and repeats until the task is done or a step limit is reached.
 
+## Inside the Brain of J.A.M.E.S.
+
+How a single request moves through JAMES — from your voice or text, into the reasoning loop, out to tools, and back as an answer:
+
+```mermaid
+flowchart TD
+    User([You]) -->|speak or type| Input
+    subgraph Input[Input Layer]
+        V[Voice STT\nor\nText mode]
+        Cfg[(config.py\nloads .env)]
+    end
+    Input --> Asst[Assistant Orchestrator\nvoice + llm + tools + logging + safety]
+
+    subgraph Brain["The Brain — Reasoning Loop"]
+        LLM[LLM Provider\nOpenAI / Anthropic / Gemini / Ollama]
+        Decide{Model returned\ntool calls?}
+        Reg[Tool Registry\ndiscovers & executes tools]
+        Exec[Run Tool\nfiles · web · browser · memory\ndesktop · delegate · research · MCP]
+        Obs[Observe Result]
+        LLM --> Decide
+        Decide -->|Yes| Reg --> Exec --> Obs --> LLM
+    end
+
+    Asst --> LLM
+    Decide -->|No| Reply
+    Reply[Stream Reply\nTTS voice / orb UI canvas] --> User
+
+    Guard[Offline Egress Guard\nfirewall + audit log] -. protects .-> Brain
+    Doctor[doctor / failover] -. resilience .-> Asst
+```
+
+The loop runs until the task is complete or a step limit is reached; every tool call is logged to the audit trail and dangerous actions can require confirmation.
+
 ## Adding a tool
 
 ```python
