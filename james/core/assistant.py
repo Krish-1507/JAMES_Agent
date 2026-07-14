@@ -10,6 +10,8 @@ from rich.logging import RichHandler
 from ..config import settings
 from ..llm import build_provider
 from ..tools.registry import ToolRegistry
+from ..tools.delegate_tool import configure_delegate
+from ..tools.forge_tools import configure_forge
 from ..core.scheduler import scheduler
 from ..voice import build_stt, build_tts
 from .agent import Agent
@@ -36,6 +38,8 @@ class Assistant:
         self.stt = build_stt(settings.voice)
         self.tts = build_tts(settings.voice)
         self.history: List[dict] = []
+        configure_delegate(self.llm)
+        configure_forge(self.registry)
         scheduler.start()
 
     def speak(self, text: str) -> None:

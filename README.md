@@ -39,6 +39,9 @@ line. Add new superpowers by dropping a `Tool` into the registry.
 | **⏰ Scheduling** | `schedule_task`, `list_scheduled`, `cancel_task` (reminders + delayed/recurring commands) |
 | **System** | `run_shell_command`, `open_application`, `take_screenshot`, `get_system_info`, `control_media`, `clipboard` |
 | **🔌 Plugins** | `roll_dice` (example) + any tool you drop into `james/plugins/` or `./plugins/` |
+| **🧩 Delegate** | `delegate` — fan out subtasks to isolated sub-agents (parallel via threads) |
+| **🌐 MCP** | Connect **any** Model Context Protocol server; its tools appear automatically (`pip install mcp`) |
+| **🧠 Skill Forge** | `save_skill` / `list_skills` / `forget_skill` — JAMES persists working plugins and hot-loads them |
 
 > Want a new skill? Run `python -m james --new-tool my_tool`, edit the scaffold,
 > and JAMES discovers it automatically — no core changes needed.
@@ -52,6 +55,25 @@ line. Add new superpowers by dropping a `Tool` into the registry.
 - **Audit log** — every tool call is appended to `AUDIT_LOG` (who/what/when/result).
 - No telemetry: every request goes only to the provider/endpoint *you* configure.
 
+## 🌐 Extensibility: MCP + Skill Forge
+
+**MCP — inherit the whole ecosystem for free.** `pip install mcp`, then point JAMES
+at any Model Context Protocol server (stdio or HTTP/SSE) via `MCP_SERVERS` or a
+`mcp.json` file. Its tools show up in the registry like native ones — no glue code:
+
+```json
+[{"name":"fs","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","./workspace"]}]
+```
+
+**Skill Forge — JAMES teaches itself.** After a complex task, say
+*“save this as a skill called <name>”* and JAMES writes a real, typed `@tool`
+plugin to `./plugins/`, validates it, and hot-loads it into the live session.
+Unlike generic "skills", the result is a directly executable native tool — no
+re-prompting next time. Manage them with `list_skills` / `forget_skill`.
+
+**Delegation.** `delegate` spins up isolated sub-agents for parallel subtasks and
+combines their results — split a big job across threads in one request.
+
 ## 🖥️ Optional GUI
 
 Prefer a visual shell? `pip install pyqt5` then `python -m james --ui` launches the
@@ -61,26 +83,24 @@ orb interface (assistant runs in a worker thread, log streams to the window).
 
 ## 🚀 Quick start
 
+**One line (Linux/macOS/WSL):**
 ```bash
-# 1. Clone
+curl -fsSL https://raw.githubusercontent.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/main/install.sh | bash
+```
+**One line (Windows, PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/main/install.ps1 | iex
+```
+
+Or manually:
+```bash
 git clone https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S.git
-cd james
-
-# 2. Create your environment
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+cd "Voice-Automated-Desktop-Agent-J.A.M.E.S"
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
-
-# 3. Configure
-cp .env.example .env
-#   edit .env and set LLM_PROVIDER + the matching API key + LLM_MODEL
-
-# 4. Validate
+cp .env.example .env      # edit: set LLM_PROVIDER + API key (or custom for Ollama)
 python -m james --check
-
-# 5. Run
-python -m james                  # voice mode (if a mic/STT is configured)
-python -m james --text           # text-only mode
+python -m james --text    # or: python -m james --ui
 ```
 
 Minimal `.env` for an OpenAI user:

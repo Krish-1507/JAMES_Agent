@@ -22,7 +22,10 @@ from .browser_tools import (
     browser_screenshot,
     browser_type,
 )
+from .delegate_tool import delegate
 from .document_tools import create_pdf, create_powerpoint, create_word_document
+from .forge_tools import forget_skill, list_skills, save_skill
+from .mcp_tools import discover_mcp_tools
 from .file_tools import (
     delete_file,
     list_directory,
@@ -52,6 +55,7 @@ ALL_TOOLS: List[Tool] = [
     browser_screenshot, browser_close,
     remember, recall,
     schedule_task, list_scheduled, cancel_task,
+    delegate, save_skill, list_skills, forget_skill,
     run_shell_command, open_application, take_screenshot,
     get_system_info, control_media, clipboard,
 ]
@@ -105,6 +109,11 @@ class ToolRegistry:
         if discover_plugins:
             _discover_builtin_plugins(self)
             _discover_external_plugins(self)
+            try:
+                for t in discover_mcp_tools():
+                    self._tools[t.name] = t
+            except Exception as exc:
+                print(f"[plugins] MCP discovery failed: {exc}")
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
