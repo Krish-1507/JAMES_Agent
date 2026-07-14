@@ -21,6 +21,66 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
+# Core dependencies are enough to run JAMES in text mode with any LLM provider.
+# Everything else is an optional extra so the base install stays light.
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "rich>=13.7.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "openai>=1.30.0",
+    "anthropic>=0.25.0",
+    "google-generativeai>=0.4.0",
+]
+
+[project.optional-dependencies]
+# Orb GUI (live task canvas)
+ui = ["PyQt5>=5.15.0"]
+# Model Context Protocol — inherit thousands of community servers
+mcp = ["mcp>=1.2.0"]
+# Document generation
+docs = [
+    "python-docx>=1.1.0",
+    "python-pptx>=0.6.23",
+    "reportlab>=4.1.0",
+    "fpdf2>=2.7.9",
+]
+# Browser automation (Playwright)
+browser = ["playwright>=1.43.0"]
+# Desktop control (computer-use)
+desktop = ["pyautogui>=0.9.54", "Pillow>=10.0.0", "pyperclip>=1.8.2", "psutil>=5.9.8", "plyer>=2.1.0"]
+# Voice (STT + TTS)
+voice = [
+    "SpeechRecognition>=3.10.0",
+    "pyttsx3>=2.90",
+    "PyAudio>=0.2.13",
+    "openai-whisper>=20231117",
+    "edge-tts>=6.1.0",
+]
+# Long-term semantic memory (RAG)
+memory = ["sentence-transformers>=2.2.0", "numpy>=1.24.0"]
+# Everything optional
+all = [
+    "PyQt5>=5.15.0",
+    "mcp>=1.2.0",
+    "python-docx>=1.1.0",
+    "python-pptx>=0.6.23",
+    "reportlab>=4.1.0",
+    "fpdf2>=2.7.9",
+    "playwright>=1.43.0",
+    "pyautogui>=0.9.54",
+    "pyperclip>=1.8.2",
+    "psutil>=5.9.8",
+    "plyer>=2.1.0",
+    "SpeechRecognition>=3.10.0",
+    "pyttsx3>=2.90",
+    "PyAudio>=0.2.13",
+    "openai-whisper>=20231117",
+    "edge-tts>=6.1.0",
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S"
 Repository = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S"

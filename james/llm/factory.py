@@ -56,6 +56,23 @@ def _build_one(provider: str, model: str, settings: LLMSettings) -> LLMProvider:
     raise ValueError(f"Unknown LLM provider: {provider!r}")
 
 
+def _is_permanent_error(exc: Exception) -> bool:
+    """Return True for errors that won't heal by retrying another provider.
+
+    Auth/permission problems are permanent for a given key, so retrying a
+    different provider (which may use the *same* bad key) just wastes time and
+    can rack up unnecessary requests. Transient issues (rate limits, timeouts,
+    5xx, network) are retried.
+    """
+    etype = type(exc).__name__
+    if "Authentication" in etype or "Permission" in etype or "Authorization" in etype:
+        return True
+    msg = str(exc).lower()
+    markers = ("401", "403", "authentication", "api key", "incorrect api",
+               "permission", "forbidden", "unauthorized", "invalid api key")
+    return any(m in msg for m in markers)
+
+
 class FailoverProvider(LLMProvider):
     name = "failover"
 
@@ -67,11 +84,20 @@ class FailoverProvider(LLMProvider):
 
     def chat(self, messages, tools=None, tool_choice="auto") -> LLMResponse:
         last: Exception | None = None
-        for p in self.providers:
+        for i, p in enumerate(self.providers):
+            label = getattr(p, "name", f"provider[{i}]")
             try:
-                return p.chat(messages, tools=tools, tool_choice=tool_choice)
+                if len(self.providers) > 1:
+                    print(f"[failover] trying {label}...")
+                resp = p.chat(messages, tools=tools, tool_choice=tool_choice)
+                if len(self.providers) > 1:
+                    print(f"[failover] OK served by {label}")
+                return resp
             except Exception as exc:  # try the next provider
+                if _is_permanent_error(exc):
+                    raise
                 last = exc
+                print(f"[failover] {label} failed ({exc}); retrying next...")
                 continue
         raise RuntimeError(f"All {len(self.providers)} providers failed. Last error: {last}")
 

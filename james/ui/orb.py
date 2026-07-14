@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
@@ -47,6 +48,8 @@ class _Worker(QThread):
     status = pyqtSignal(str)
     canvas = pyqtSignal(str)
     stream = pyqtSignal(str)
+    canvas_start = pyqtSignal(str, str)   # call_id, name
+    canvas_done = pyqtSignal(str, str, str, bool)  # call_id, name, snippet, ok
 
     def __init__(self):
         super().__init__()
@@ -57,8 +60,8 @@ class _Worker(QThread):
 
         self._assistant = Assistant()
         self._assistant.on_event = self._on_event
-        if getattr(self._assistant, "agent", None) is not None:
-            self._assistant.agent.on_tool = self._on_tool
+        # Route every tool call (parent + delegated sub-agents) to the canvas.
+        self._assistant.set_tool_hooks(self._on_tool, self._on_tool_start)
 
         import sys
 
@@ -91,9 +94,12 @@ class _Worker(QThread):
         elif t == "speak":
             self.status.emit("🔊 Speaking")
 
-    def _on_tool(self, name: str, args: dict, result: str):
-        snippet = str(result)[:90].replace("\n", " ")
-        self.canvas.emit(f"🔧 {name}: {snippet}")
+    def _on_tool_start(self, call_id: str, name: str, args: dict):
+        self.canvas_start.emit(call_id, name)
+
+    def _on_tool(self, call_id: str, name: str, args: dict, result: str):
+        ok = not (result.startswith("Error") or "failed" in result.lower())
+        self.canvas_done.emit(call_id, name, str(result)[:140].replace("\n", " "), ok)
 
 
 class OrbWindow(QMainWindow):
@@ -119,6 +125,7 @@ class OrbWindow(QMainWindow):
 
         layout.addWidget(QLabel("Live task canvas"))
         self.canvas = QListWidget()
+        self.canvas.setStyleSheet("QListWidget::item { padding: 2px; }")
         layout.addWidget(self.canvas)
 
         self.log = QPlainTextEdit()
@@ -133,11 +140,14 @@ class OrbWindow(QMainWindow):
         self.worker.log.connect(self.log.appendPlainText)
         self.worker.status.connect(self._on_status)
         self.worker.canvas.connect(self._on_canvas)
+        self.worker.canvas_start.connect(self._on_canvas_start)
+        self.worker.canvas_done.connect(self._on_canvas_done)
         self.worker.stream.connect(self._on_stream)
         self._stream_text = ""
         self._stream_i = 0
         self._timer = QTimer()
         self._timer.timeout.connect(self._tick)
+        self._canvas_items = {}
 
         self._setup_tray()
         self.start()
@@ -162,6 +172,29 @@ class OrbWindow(QMainWindow):
 
     def _on_canvas(self, line: str):
         self.canvas.addItem(line)
+        self.canvas.scrollToBottom()
+
+    def _on_canvas_start(self, call_id: str, name: str):
+        from datetime import datetime
+
+        ts = datetime.now().strftime("%H:%M:%S")
+        item = QListWidgetItem(f"▶ [{ts}] {name}…")
+        item.setForeground(QColor("#e0b000"))
+        self.canvas.addItem(item)
+        self._canvas_items[call_id] = item
+        self.canvas.scrollToBottom()
+
+    def _on_canvas_done(self, call_id: str, name: str, snippet: str, ok: bool):
+        from datetime import datetime
+
+        ts = datetime.now().strftime("%H:%M:%S")
+        item = self._canvas_items.pop(call_id, None)
+        if item is None:
+            item = QListWidgetItem()
+            self.canvas.addItem(item)
+        mark = "✓" if ok else "✗"
+        item.setText(f"{mark} [{ts}] {name}: {snippet}")
+        item.setForeground(QColor("#3ad17a" if ok else "#ff6b6b"))
         self.canvas.scrollToBottom()
 
     def start(self):

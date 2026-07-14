@@ -35,13 +35,14 @@ line. Add new superpowers by dropping a `Tool` into the registry.
 | **Documents** | `create_word_document` (.docx), `create_powerpoint` (.pptx), `create_pdf` |
 | **Web** | `web_search`, `fetch_url` |
 | **🌐 Browser** | `browser_navigate`, `browser_click`, `browser_type`, `browser_extract`, `browser_screenshot`, `browser_close` |
-| **🧠 Memory** | `remember`, `recall` (long-term, cross-session RAG over a local store) |
+| **🖥️ Computer-use** | `computer_use` — screenshot → vision-model decides → act with `pyautogui` (click/type/scroll); fully local, no cloud browser |
+| **🧠 Memory** | `remember`, `recall` — long-term, cross-session **semantic** memory (RAG over a local store; embeddings when `[memory]` extra is installed) |
 | **⏰ Scheduling** | `schedule_task`, `list_scheduled`, `cancel_task` (reminders + delayed/recurring commands) |
 | **System** | `run_shell_command`, `open_application`, `take_screenshot`, `get_system_info`, `control_media`, `clipboard` |
 | **🔌 Plugins** | `roll_dice` (example) + any tool you drop into `james/plugins/` or `./plugins/` |
 | **🧩 Delegate** | `delegate` — fan out subtasks to isolated sub-agents (parallel via threads) |
-| **🌐 MCP** | Connect **any** Model Context Protocol server; its tools appear automatically (`pip install mcp`) |
-| **🧠 Skill Forge** | `save_skill` / `list_skills` / `forget_skill` — JAMES persists working plugins and hot-loads them |
+| **🌐 MCP** | Connect **any** Model Context Protocol server; its tools appear automatically (`pip install "james-assistant[mcp]"`) |
+| **🧠 Skill Forge** | `save_skill` / `list_skills` / `forget_skill` — and **auto-generation**: after a successful multi-tool task JAMES writes a native `@tool` plugin to `./plugins/` and hot-loads it |
 
 > Want a new skill? Run `python -m james --new-tool my_tool`, edit the scaffold,
 > and JAMES discovers it automatically — no core changes needed.
@@ -57,7 +58,7 @@ line. Add new superpowers by dropping a `Tool` into the registry.
 
 ## 🌐 Extensibility: MCP + Skill Forge
 
-**MCP — inherit the whole ecosystem for free.** `pip install mcp`, then point JAMES
+**MCP — inherit the whole ecosystem for free.** `pip install "james-assistant[mcp]"` (the `mcp` extra), then point JAMES
 at any Model Context Protocol server (stdio or HTTP/SSE) via `MCP_SERVERS` or a
 `mcp.json` file. Its tools show up in the registry like native ones — no glue code:
 
@@ -68,11 +69,28 @@ at any Model Context Protocol server (stdio or HTTP/SSE) via `MCP_SERVERS` or a
 **Skill Forge — JAMES teaches itself.** After a complex task, say
 *“save this as a skill called <name>”* and JAMES writes a real, typed `@tool`
 plugin to `./plugins/`, validates it, and hot-loads it into the live session.
-Unlike generic "skills", the result is a directly executable native tool — no
-re-prompting next time. Manage them with `list_skills` / `forget_skill`.
+Unlike generic "skills" (free-text recipes), the result is a directly executable,
+typed native tool — no re-implementation and no re-prompting next time. Manage
+them with `list_skills` / `forget_skill`.
+
+**Self-improving Skill Forge (auto).** With `AUTO_SKILL=true` (default), after a
+successful multi-tool task JAMES *generates* that capability as a native `@tool`
+on its own — it inspects the tool chain it just ran, asks the model to write a
+clean `@tool` plugin encapsulating the workflow, validates it, persists it to
+`./plugins/`, and hot-loads it. Next time, the model can call the saved tool
+directly. That's a stricter, more useful self-improvement loop than a generic
+"skill": the artifact is real, runnable code.
+
+**Computer-use (vision desktop control).** `computer_use` runs a tight local loop —
+screenshot the screen, ask a vision model what to do next, act with `pyautogui`
+(click / type / scroll), repeat until the instruction is done. No cloud browser
+required; pair it with a local vision model (e.g. Ollama `llava`) in offline mode.
+Granular control tools `click_at`, `type_text`, `press_key`, `screenshot_save` are
+also available (`pip install "james-assistant[desktop]"`).
 
 **Delegation.** `delegate` spins up isolated sub-agents for parallel subtasks and
-combines their results — split a big job across threads in one request.
+combines their results — split a big job across threads in one request. Sub-agent
+tool calls stream into the same live task canvas as the parent.
 
 ## 🖥️ Optional GUI
 
@@ -88,7 +106,9 @@ and a **system tray** icon to hide/show/quit. The assistant runs in a worker thr
   workspace, and the Playwright browser. Great for bug reports and first-run checks.
 - **Model failover** — set `LLM_FAILOVER="anthropic:claude-3-5-sonnet-latest,groq:llama-3.3-70b-versatile"`
   and JAMES automatically retries the next provider if the primary errors (rate limits,
-  outages) so a task never dies mid-flight.
+  outages) so a task never dies mid-flight. Permanent errors (bad API key / auth / 401–403)
+  are *not* retried, since they won't heal on another provider — JAMES fails fast instead
+  of wasting requests, and logs which provider actually served each request.
 
 ---
 
@@ -98,17 +118,24 @@ and a **system tray** icon to hide/show/quit. The assistant runs in a worker thr
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/main/install.sh | bash
 ```
+The one-liner auto-clones the repo if you're not already inside it, creates a virtualenv,
+and installs JAMES with the orb GUI + MCP client by default (`pip install -e ".[ui,mcp]"`).
+Add flags to pull more: `--with-browser`, `--with-voice`, `--with-desktop`,
+`--with-docs`, `--with-all`, or `--minimal` for core only.
+
 **One line (Windows, PowerShell):**
 ```powershell
 irm https://raw.githubusercontent.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/main/install.ps1 | iex
 ```
+Same auto-clone + extras behavior; flags: `-WithBrowser`, `-WithVoice`, `-WithDesktop`,
+`-WithDocs`, `-WithAll`, `-Minimal`.
 
 Or manually:
 ```bash
 git clone https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S.git
 cd "Voice-Automated-Desktop-Agent-J.A.M.E.S"
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
+pip install -e ".[ui,mcp]"   # add extras you want: docs, browser, voice, desktop, all
 cp .env.example .env      # edit: set LLM_PROVIDER + API key (or custom for Ollama)
 python -m james --check
 python -m james doctor     # self-diagnostics (deps, keys, mic, browser…)
@@ -132,6 +159,19 @@ LLM_MODEL=llama3.1
 CUSTOM_BASE_URL=http://localhost:11434/v1   # Ollama
 CUSTOM_API_KEY=ollama
 VOICE_ENABLED=false
+```
+
+And for a **privacy-certified, zero-egress** run (everything on your machine):
+
+```dotenv
+OFFLINE_MODE=true
+LLM_PROVIDER=custom
+LLM_MODEL=llava                 # a local vision model for computer-use
+VISION_MODEL=llava
+CUSTOM_BASE_URL=http://localhost:11434/v1
+CUSTOM_API_KEY=ollama
+VOICE_ENABLED=false
+pip install "james-assistant[desktop,memory]"
 ```
 
 ---
@@ -217,18 +257,34 @@ and the LLM can use it immediately — no other changes needed.
 ## 🔒 Safety
 
 - Tools that mutate the system (`run_shell_command`, `delete_file`,
-  `open_application`) are flagged dangerous and, when
-  `CONFIRM_DANGEROUS_ACTIONS=true`, ask for confirmation before running.
+  `open_application`, `computer_use`, `click_at`, `type_text`, `press_key`) are
+  flagged dangerous and, when `CONFIRM_DANGEROUS_ACTIONS=true`, ask for
+  confirmation before running.
 - JAMES never phones home. All calls go to the provider/endpoint *you* configure.
+
+## 🛡️ Privacy-certified offline mode
+
+Run JAMES as a **fully local JARVIS** with `OFFLINE_MODE=true` (or `python -m james --offline`).
+A socket-level firewall blocks **every** non-loopback network attempt — DNS
+resolution and TCP connect alike — so even the LLM SDKs, the browser, or a future
+plugin cannot exfiltrate data. Only `127.0.0.1`/`localhost` is permitted, which is
+exactly where a local model like Ollama listens. Every allowed and blocked
+connection is appended to `EGRESS_AUDIT_LOG`, so you (or an auditor) can *prove*
+nothing left the machine. Web tools refuse explicitly in this mode. Pair it with
+`LLM_PROVIDER=custom` + `CUSTOM_BASE_URL=http://localhost:11434/v1` to run the
+whole stack — agent, tools, and model — on your own hardware.
 
 ---
 
 ## 🧭 Roadmap
 
-- [ ] GUI / system-tray presence (revive the original PyQt orb UI)
-- [ ] Long-term memory + RAG over your files
-- [ ] Multi-step scheduled tasks & reminders
-- [ ] Browser agent (Playwright) for full click-through automation
+- [x] GUI / system-tray orb with live task canvas + streaming replies
+- [x] Long-term **semantic** memory + RAG over your files (embeddings when `[memory]` installed)
+- [x] Multi-step scheduled tasks & reminders
+- [x] Browser agent (Playwright) for full click-through automation
+- [x] **Computer-use** vision loop (screenshot → act) — local, no cloud browser
+- [x] **Privacy-certified offline mode** with egress audit log
+- [x] **Self-improving Skill Forge** — auto-generates native `@tool` plugins
 - [ ] Plugin marketplace for community tools
 - [ ] Mobile companion app
 

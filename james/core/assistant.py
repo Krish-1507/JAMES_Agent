@@ -11,10 +11,20 @@ from ..config import settings
 from ..llm import build_provider
 from ..tools.registry import ToolRegistry
 from ..tools.delegate_tool import configure_delegate
+from ..tools.desktop_tools import configure_computer_use
 from ..tools.forge_tools import configure_forge
 from ..core.scheduler import scheduler
+from ..core.guard import install_offline_guard
 from ..voice import build_stt, build_tts
 from .agent import Agent
+
+
+def _fmt_args(args: dict) -> str:
+    try:
+        s = ", ".join(f"{k}={v!r}" for k, v in (args or {}).items())
+    except Exception:
+        s = str(args)
+    return s[:80]
 
 console = Console()
 
@@ -32,16 +42,39 @@ class Assistant:
     def __init__(self):
         self.log = get_logger()
         self.settings = settings
+        if settings.assistant.offline_mode:
+            install_offline_guard()  # enforce privacy-certified local mode
         self.registry = ToolRegistry()
         self.llm = build_provider(settings.llm)
         self.agent = Agent(self.llm, self.registry)
         self.stt = build_stt(settings.voice)
         self.tts = build_tts(settings.voice)
         self.history: List[dict] = []
-        configure_delegate(self.llm)
+        self._forged_tasks: set = set()
+        configure_delegate(self.llm, on_tool=self._on_tool, on_tool_start=self._on_tool_start)
+        configure_computer_use(self.llm)
         configure_forge(self.registry)
         scheduler.start()
         self.on_event = None  # GUI hook: receives dict events (type: user|thinking|reply|speak)
+
+    # ---- live tool hooks (console by default, GUI overrides via set_tool_hooks) ----
+    def _on_tool_start(self, call_id: str, name: str, args: dict) -> None:
+        console.print(f"[dim]🔧 {name}({_fmt_args(args)})…[/dim]")
+        self._emit({"type": "tool_start", "call_id": call_id, "name": name, "args": args})
+
+    def _on_tool(self, call_id: str, name: str, args: dict, result: str) -> None:
+        ok = not (result.startswith("Error") or "failed" in result.lower())
+        tag = "[green]✓[/green]" if ok else "[red]✗[/red]"
+        console.print(f"{tag} {name}: {result[:120]}")
+        self._emit(
+            {"type": "tool", "call_id": call_id, "name": name, "args": args, "result": result, "ok": ok}
+        )
+
+    def set_tool_hooks(self, on_tool=None, on_tool_start=None) -> None:
+        """Let the GUI replace the default console hooks (and propagate to delegates)."""
+        self.agent.on_tool = on_tool
+        self.agent.on_tool_start = on_tool_start
+        configure_delegate(self.llm, on_tool=on_tool, on_tool_start=on_tool_start)
 
     def _emit(self, event: dict) -> None:
         if self.on_event:
@@ -62,8 +95,45 @@ class Assistant:
             self.log.warning("TTS error: %s", exc)
 
     def think(self, user_text: str) -> str:
-        reply, self.history = self.agent.run(user_text, history=self.history[-20:])
+        from ..tools.memory_tools import get_relevant_memories
+
+        # Surface relevant long-term memory so JAMES "remembers everything".
+        mem = get_relevant_memories(user_text)
+        prompt = f"[Relevant memory]\n{mem}\n\n{user_text}" if mem else user_text
+
+        prev_len = len(self.history)
+        reply, self.history = self.agent.run(prompt, history=self.history[-20:])
+        self._maybe_auto_forge(user_text, self.history, prev_len)
         return reply
+
+    def _maybe_auto_forge(self, user_text: str, messages: list, prev_len: int) -> None:
+        """After a successful multi-tool task, persist it as a native @tool skill."""
+        if not settings.assistant.auto_skill:
+            return
+        new_msgs = messages[prev_len:]
+        tool_calls = sum(1 for m in new_msgs if m.get("role") == "tool")
+        saved = any(
+            m.get("role") == "assistant"
+            and any(
+                tc.get("function", {}).get("name") == "save_skill"
+                for tc in m.get("tool_calls", [])
+            )
+            for m in new_msgs
+        )
+        if tool_calls < 3 or saved:
+            return
+        key = user_text.strip().lower()
+        if key in self._forged_tasks:
+            return
+        self._forged_tasks.add(key)
+        try:
+            from ..tools.forge_tools import auto_forge_from_history
+
+            res = auto_forge_from_history(self.llm, messages)
+            self.log.info("Skill Forge auto-generated: %s", res.output)
+            self._emit({"type": "skill", "text": res.output})
+        except Exception as exc:
+            self.log.warning("Auto-forge error: %s", exc)
 
     def handle_turn(self, user_text: str) -> None:
         if not user_text:

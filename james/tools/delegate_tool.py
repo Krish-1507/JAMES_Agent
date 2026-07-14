@@ -11,12 +11,19 @@ from typing import List
 
 from .base import Tool, ToolResult, tool
 
-_context = {"llm": None}
+_context = {"llm": None, "on_tool": None, "on_tool_start": None}
 
 
-def configure_delegate(llm) -> None:
-    """Called by the Assistant so the tool can build child agents."""
+def configure_delegate(llm, on_tool=None, on_tool_start=None) -> None:
+    """Called by the Assistant so the tool can build child agents.
+
+    ``on_tool`` / ``on_tool_start`` are forwarded to every child agent so that
+    tool calls made by delegated sub-agents stream into the same live canvas
+    as the parent's.
+    """
     _context["llm"] = llm
+    _context["on_tool"] = on_tool
+    _context["on_tool_start"] = on_tool_start
 
 
 def _run_one(task: str) -> str:
@@ -27,6 +34,9 @@ def _run_one(task: str) -> str:
     child_tools = [t for t in ALL_TOOLS if t.name != "delegate"]
     child = ToolRegistry(tools=child_tools, discover_plugins=False)
     agent = Agent(_context["llm"], child, max_iterations=8)
+    # Stream the child's tool activity to the live canvas / logs.
+    agent.on_tool = _context.get("on_tool")
+    agent.on_tool_start = _context.get("on_tool_start")
     reply, _ = agent.run(task)
     return reply
 

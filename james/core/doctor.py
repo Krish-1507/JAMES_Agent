@@ -62,6 +62,32 @@ def run_diagnostics() -> str:
         except Exception:
             out.append(_line("WARN", f"{label} ({mod})", "optional — see README"))
 
+    # MCP servers
+    try:
+        from ..tools.mcp_tools import _with_session, load_mcp_configs
+
+        specs = load_mcp_configs()
+        if specs:
+            import asyncio
+
+            for spec in specs:
+                try:
+
+                    async def _probe(s):
+                        async def _list(session):
+                            return (await session.list_tools()).tools
+
+                        return await asyncio.wait_for(_with_session(s, _list), timeout=15)
+
+                    tools = asyncio.run(_probe(spec))
+                    out.append(_line("PASS", f"MCP '{spec.name}' ({len(tools)} tool(s))"))
+                except Exception as exc:
+                    out.append(_line("WARN", f"MCP '{spec.name}' unreachable", str(exc)[:80]))
+        else:
+            out.append(_line("WARN", "No MCP servers configured", "add mcp.json / MCP_SERVERS"))
+    except Exception as exc:
+        out.append(_line("WARN", "MCP check skipped", str(exc)[:80]))
+
     # API key for selected provider
     if settings.llm.api_key:
         out.append(_line("PASS", f"API key set for '{settings.llm.provider}'"))
@@ -109,5 +135,32 @@ def run_diagnostics() -> str:
         out.append(_line("PASS", "Playwright Chromium ready"))
     except Exception as exc:
         out.append(_line("WARN", "Browser not ready", "pip install playwright && playwright install chromium"))
+
+    # Computer-use (desktop control)
+    try:
+        import pyautogui  # noqa: F401
+
+        out.append(_line("PASS", "Computer-use (pyautogui) available"))
+    except Exception:
+        out.append(_line("WARN", "Computer-use (pyautogui)", "pip install 'james-assistant[desktop]'"))
+
+    # Semantic memory
+    if settings.assistant.memory_enabled:
+        try:
+            from sentence_transformers import SentenceTransformer  # noqa: F401
+
+            out.append(_line("PASS", "Semantic memory (sentence-transformers)"))
+        except Exception:
+            out.append(_line("WARN", "Semantic memory", "pip install 'james-assistant[memory]' for embeddings"))
+    else:
+        out.append(_line("WARN", "Memory disabled", "set MEMORY_ENABLED=true"))
+
+    # Offline / privacy mode
+    if settings.assistant.offline_mode:
+        out.append(_line("PASS", "Offline mode ON — non-local egress blocked + audited"))
+        out.append(_line("WARN", f"Egress audit: {settings.assistant.egress_audit_log}",
+                         "every blocked/allowed connection is logged here"))
+    else:
+        out.append(_line("WARN", "Offline mode OFF", "set OFFLINE_MODE=true to block all non-local network egress"))
 
     return "\n".join(out)

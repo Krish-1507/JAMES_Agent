@@ -28,7 +28,11 @@ class Agent:
         )
         self.confirm = confirm or self._default_confirm
         self._nudge = nudge
-        self.on_tool = None  # optional hook(name, args, result) called after each tool
+        # Optional hooks for live UI / logging. Both receive a unique per-call
+        # ``call_id`` so a "started" event can be matched to its "finished" event.
+        self.on_tool_start = None  # on_tool_start(call_id, name, args)
+        self.on_tool = None        # on_tool(call_id, name, args, result)
+        self._tool_seq = 0
         self.system_prompt = build_system_prompt()
 
     @staticmethod
@@ -83,6 +87,13 @@ class Agent:
                 tool_calls_this_turn += 1
                 if tc.name == "save_skill":
                     saved_skill = True
+                self._tool_seq += 1
+                call_id = f"{id(self)}-{self._tool_seq}"
+                if self.on_tool_start:
+                    try:
+                        self.on_tool_start(call_id, tc.name, tc.arguments)
+                    except Exception:
+                        pass
                 if self.confirm_dangerous and tc.name in DANGEROUS_TOOLS:
                     allowed = self.confirm(tc.name, tc.arguments)
                     if not allowed:
@@ -93,7 +104,10 @@ class Agent:
                     result_text = self.registry.execute(tc.name, tc.arguments).output
 
                 if self.on_tool:
-                    self.on_tool(tc.name, tc.arguments, result_text)
+                    try:
+                        self.on_tool(call_id, tc.name, tc.arguments, result_text)
+                    except Exception:
+                        pass
 
                 messages.append(
                     {"role": "tool", "tool_call_id": tc.id, "content": result_text}

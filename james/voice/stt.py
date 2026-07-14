@@ -11,8 +11,6 @@ import io
 import tempfile
 import wave
 
-import speech_recognition as sr
-
 from ..config import VoiceSettings
 
 
@@ -26,6 +24,8 @@ class GoogleSTT(STTProvider):
         self.mic_index = mic_index
 
     def listen(self) -> str:
+        import speech_recognition as sr
+
         r = sr.Recognizer()
         with sr.Microphone(device_index=self.mic_index) as src:
             r.adjust_for_ambient_noise(src, duration=0.3)
@@ -82,7 +82,9 @@ class TextSTT(STTProvider):
             return ""
 
 
-def _record(mic_index=None) -> sr.AudioData | None:
+def _record(mic_index=None) -> "sr.AudioData | None":
+    import speech_recognition as sr
+
     r = sr.Recognizer()
     with sr.Microphone(device_index=mic_index) as src:
         r.adjust_for_ambient_noise(src, duration=0.3)
