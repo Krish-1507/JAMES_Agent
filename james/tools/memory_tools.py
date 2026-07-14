@@ -22,8 +22,8 @@ def _embedder():
     global _EMBED
     if _EMBED is not None:
         return _EMBED
-    # Opt-in only: downloading/loading the model is slow and network-dependent.
-    if not os.getenv("MEMORY_EMBEDDING"):
+    # Opt-in by default: only load when MEMORY_EMBEDDING is not explicitly "false".
+    if os.getenv("MEMORY_EMBEDDING", "true").lower() in ("false", "0", "no", "off"):
         _EMBED = False
         return _EMBED
     try:
@@ -104,3 +104,14 @@ def recall(query: str, top_k: int = 3) -> ToolResult:
     ranked = sorted(entries, key=lambda e: _score(query, e["text"]), reverse=True)[:top_k]
     body = "\n".join(f"- {e['text']}" for e in ranked)
     return ToolResult(ok=True, output=body)
+
+
+def get_relevant_memories(query: str, top_k: int = 4) -> str:
+    """Internal helper: return relevant memories as a block of text (or '')."""
+    if not settings.assistant.memory_enabled:
+        return ""
+    entries = _load()
+    if not entries:
+        return ""
+    ranked = sorted(entries, key=lambda e: _score(query, e["text"]), reverse=True)[:top_k]
+    return "\n".join(f"- {e['text']}" for e in ranked)

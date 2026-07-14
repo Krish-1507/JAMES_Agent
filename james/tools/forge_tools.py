@@ -37,30 +37,16 @@ def _find_tools(module) -> list:
     return [v for v in vars(module).values() if isinstance(v, Tool)]
 
 
-@tool(
-    "save_skill",
-    "Persist a reusable capability as a native JAMES plugin. Provide a working @tool-decorated "
-    "Python function as 'code'; JAMES validates, saves it to plugins/, and loads it immediately.",
-    {
-        "name": {"type": "string", "description": "Skill/tool name (letters, digits, underscores)."},
-        "description": {"type": "string", "description": "What the skill does (becomes the tool description)."},
-        "code": {
-            "type": "string",
-            "description": "Full Python source defining a @tool-decorated function (import tool from james.tools.base).",
-        },
-    },
-    required=["name", "code"],
-)
-def save_skill(name: str, code: str, description: str = "") -> ToolResult:
+def _persist_skill(name: str, code: str, description: str = "") -> ToolResult:
+    """Validate, save to plugins/, and hot-load a @tool plugin. Shared by save_skill + auto-forge."""
     _PLUGINS_DIR.mkdir(exist_ok=True)
     fname = _safe_name(name)
     path = _PLUGINS_DIR / f"{fname}.py"
 
-    # Always anchor the code with the required import so users can omit it.
+    # Always anchor the code with the required import so users/models can omit it.
     if "from james.tools.base import" not in code and "import tool" not in code:
         code = "from james.tools.base import tool\n" + code
 
-    # Validate syntax first.
     try:
         tmp = path.with_suffix(".tmp.py")
         tmp.write_text(code, encoding="utf-8")
@@ -71,7 +57,6 @@ def save_skill(name: str, code: str, description: str = "") -> ToolResult:
 
     path.write_text(code, encoding="utf-8")
 
-    # Import and hot-register.
     try:
         spec = importlib.util.spec_from_file_location(f"james_skill_{fname}", str(path))
         module = importlib.util.module_from_spec(spec)
@@ -91,6 +76,24 @@ def save_skill(name: str, code: str, description: str = "") -> ToolResult:
         return ToolResult(ok=True, output=f"Saved & loaded skill(s): {loaded} at {path}")
     except Exception as exc:
         return ToolResult(ok=False, output=f"Skill loaded with errors:\n{exc}")
+
+
+@tool(
+    "save_skill",
+    "Persist a reusable capability as a native JAMES plugin. Provide a working @tool-decorated "
+    "Python function as 'code'; JAMES validates, saves it to plugins/, and loads it immediately.",
+    {
+        "name": {"type": "string", "description": "Skill/tool name (letters, digits, underscores)."},
+        "description": {"type": "string", "description": "What the skill does (becomes the tool description)."},
+        "code": {
+            "type": "string",
+            "description": "Full Python source defining a @tool-decorated function (import tool from james.tools.base).",
+        },
+    },
+    required=["name", "code"],
+)
+def save_skill(name: str, code: str, description: str = "") -> ToolResult:
+    return _persist_skill(name, code, description)
 
 
 @tool(
@@ -133,3 +136,61 @@ def forget_skill(name: str) -> ToolResult:
     _skill_tools.pop(fname, None)
     path.unlink()
     return ToolResult(ok=True, output=f"Forgot skill '{fname}'.")
+
+
+# ---------------------------------------------------------------------------
+# Self-improving Skill Forge: turn a completed multi-tool task into a native tool
+# ---------------------------------------------------------------------------
+
+def _extract_code(text: str) -> str:
+    m = re.search(r"```(?:python)?\s*(.*?)```", text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    if "@tool" in text or "def " in text:
+        return text.strip()
+    return ""
+
+
+def _derive_name(user_msg: str) -> str:
+    words = re.findall(r"[a-z0-9]+", user_msg.lower())
+    return "_".join(words[:4]) or "skill"
+
+
+def auto_forge_from_history(llm, history: list, max_steps: int = 8) -> ToolResult:
+    """Generate a native @tool plugin from the last multi-tool task and persist it.
+
+    Unlike generic 'skills' (free-text recipes), the output is a directly
+    executable, typed JAMES tool — no re-implementation and no re-prompting next
+    time the capability is needed.
+    """
+    user_msg = next((m.get("content", "") for m in reversed(history) if m.get("role") == "user"), "")
+    steps = []
+    for m in history:
+        if m.get("role") == "assistant" and m.get("tool_calls"):
+            for tc in m["tool_calls"]:
+                fn = tc.get("function", {})
+                steps.append(f"call {fn.get('name')}({fn.get('arguments')})")
+        elif m.get("role") == "tool":
+            steps.append(f"result: {str(m.get('content', ''))[:240]}")
+    if len(steps) < 2:
+        return ToolResult(ok=False, output="Not enough tool activity to forge a skill.")
+
+    transcript = "\n".join(steps[-max_steps * 2:])
+    prompt = (
+        "You are JAMES's self-improvement engine. A user asked:\n"
+        f'"""{user_msg}"""\n'
+        "JAMES solved it by chaining these tool calls:\n"
+        f"{transcript}\n\n"
+        "Write ONE reusable JAMES tool — a @tool-decorated Python function with clear JSON-schema "
+        "parameters — that encapsulates this workflow so it can be invoked directly next time. "
+        "Import only from james.tools.base (the `tool` decorator). Keep it safe, typed and "
+        "self-contained. Return ONLY the Python code, no explanation, no markdown outside the code."
+    )
+    try:
+        resp = llm.chat([{"role": "user", "content": prompt}])
+        code = _extract_code(resp.content)
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Auto-forge generation failed: {exc}")
+    if not code:
+        return ToolResult(ok=False, output="Auto-forge produced no usable code.")
+    return _persist_skill(_derive_name(user_msg), code, description=f"Auto-generated from: {user_msg[:80]}")

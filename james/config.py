@@ -113,6 +113,20 @@ class AssistantSettings:
     # Memory / RAG
     memory_enabled: bool = field(default_factory=lambda: _bool("MEMORY_ENABLED", True))
     memory_file: Path = field(default_factory=lambda: Path(_env("MEMORY_FILE", "./workspace/memory.jsonl")).resolve())
+    # Semantic memory uses sentence-transformers when installed; set to "false" to force keyword fallback.
+    memory_embedding: bool = field(default_factory=lambda: _bool("MEMORY_EMBEDDING", True))
+
+    # Self-improving Skill Forge: auto-generate a native @tool from a successful multi-tool task.
+    auto_skill: bool = field(default_factory=lambda: _bool("AUTO_SKILL", True))
+
+    # Privacy-certified local mode: block ALL non-loopback network egress and audit every attempt.
+    offline_mode: bool = field(default_factory=lambda: _bool("OFFLINE_MODE", False))
+    egress_audit_log: Path = field(
+        default_factory=lambda: Path(_env("EGRESS_AUDIT_LOG", "./workspace/james_egress.log")).resolve()
+    )
+
+    # Vision model for computer-use / image understanding (defaults to the main LLM model).
+    vision_model: str = field(default_factory=lambda: _env("VISION_MODEL", ""))
 
     # Browser automation
     browser_headless: bool = field(default_factory=lambda: _bool("BROWSER_HEADLESS", True))
@@ -132,6 +146,7 @@ class Settings:
         self.assistant.workspace_dir.mkdir(parents=True, exist_ok=True)
         self.assistant.audit_log.parent.mkdir(parents=True, exist_ok=True)
         self.assistant.memory_file.parent.mkdir(parents=True, exist_ok=True)
+        self.assistant.egress_audit_log.parent.mkdir(parents=True, exist_ok=True)
 
 
 # A single shared instance used across the application.

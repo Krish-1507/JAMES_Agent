@@ -39,8 +39,15 @@ class LLMProvider(ABC):
         messages: List[Message],
         tools: Optional[List[Tool]] = None,
         tool_choice: str = "auto",
+        images: Optional[List[str]] = None,
+        model: Optional[str] = None,
     ) -> LLMResponse:
-        """Send a conversation to the model and return a normalized response."""
+        """Send a conversation to the model and return a normalized response.
+
+        ``images`` is an optional list of base64-encoded PNGs (or http(s) URLs)
+        attached to the last user message for vision tasks (computer-use).
+        ``model`` optionally overrides the provider's default model for a call.
+        """
         raise NotImplementedError
 
     def validate(self) -> None:

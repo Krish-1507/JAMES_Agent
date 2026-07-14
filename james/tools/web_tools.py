@@ -8,11 +8,22 @@ import requests
 from bs4 import BeautifulSoup
 
 from .base import Tool, ToolResult, tool
+from ..config import settings
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 }
+
+
+def _offline_blocked() -> ToolResult | None:
+    if settings.assistant.offline_mode:
+        return ToolResult(
+            ok=False,
+            output="Offline mode is ON — web access is disabled and audited. "
+            "Use a local model / local data instead.",
+        )
+    return None
 
 
 @tool(
@@ -25,6 +36,9 @@ _HEADERS = {
     required=["query"],
 )
 def web_search(query: str, max_results: int = 5) -> ToolResult:
+    blocked = _offline_blocked()
+    if blocked:
+        return blocked
     try:
         resp = requests.post(
             "https://html.duckduckgo.com/html/",
@@ -53,6 +67,9 @@ def web_search(query: str, max_results: int = 5) -> ToolResult:
     required=["url"],
 )
 def fetch_url(url: str, max_chars: int = 8000) -> ToolResult:
+    blocked = _offline_blocked()
+    if blocked:
+        return blocked
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=25)
         soup = BeautifulSoup(resp.text, "html.parser")

@@ -47,9 +47,12 @@ class OpenAICompatibleProvider(LLMProvider):
         messages: List[Message],
         tools: Optional[List[Tool]] = None,
         tool_choice: str = "auto",
+        images: Optional[List[str]] = None,
+        model: Optional[str] = None,
     ) -> LLMResponse:
+        effective_model = model or self.model
         kwargs: Dict[str, Any] = dict(
-            model=self.model,
+            model=effective_model,
             messages=messages,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
@@ -58,6 +61,19 @@ class OpenAICompatibleProvider(LLMProvider):
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = tool_choice
+        elif images:
+            # Vision: attach images to the last user message as multimodal content.
+            multimodal = []
+            for i, m in enumerate(messages):
+                if m.get("role") == "user" and i == len(messages) - 1:
+                    content = [{"type": "text", "text": m.get("content", "")}]
+                    for img in images:
+                        url = img if str(img).startswith("http") else f"data:image/png;base64,{img}"
+                        content.append({"type": "image_url", "image_url": {"url": url}})
+                    multimodal.append({**m, "content": content})
+                else:
+                    multimodal.append(m)
+            kwargs["messages"] = multimodal
 
         resp = self._client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
@@ -179,6 +195,8 @@ class AnthropicProvider(LLMProvider):
         messages: List[Message],
         tools: Optional[List[Tool]] = None,
         tool_choice: str = "auto",
+        images: Optional[List[str]] = None,
+        model: Optional[str] = None,
     ) -> LLMResponse:
         system, conv = self._split_system(messages)
         anthropic_messages = self._to_anthropic_messages(conv)
@@ -277,6 +295,8 @@ class GeminiProvider(LLMProvider):
         messages: List[Message],
         tools: Optional[List[Tool]] = None,
         tool_choice: str = "auto",
+        images: Optional[List[str]] = None,
+        model: Optional[str] = None,
     ) -> LLMResponse:
         contents = self._to_gemini_contents(messages)
         kwargs: Dict[str, Any] = dict(

@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="Validate configuration and exit.")
     parser.add_argument("--new-tool", metavar="NAME", help="Scaffold a new plugin tool file in ./plugins/.")
     parser.add_argument("--ui", action="store_true", help="Launch the optional PyQt5 orb GUI.")
+    parser.add_argument("--offline", action="store_true", help="Privacy mode: block ALL non-local network egress (audited).")
     parser.add_argument("--doctor", action="store_true", help="Run self-diagnostic checks and exit.")
     parser.add_argument("command", nargs="?", help="Optional command: 'doctor'.")
     args = parser.parse_args(argv)
@@ -124,6 +125,13 @@ def main(argv: list[str] | None = None) -> int:
             "    Copy .env.example to .env and set the relevant key, or use a local model (LLM_PROVIDER=custom)."
         )
         return 1
+
+    if args.offline:
+        settings.assistant.offline_mode = True
+    if settings.assistant.offline_mode:
+        from .core.guard import install_offline_guard
+
+        install_offline_guard()
 
     try:
         assistant = Assistant()

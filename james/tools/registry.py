@@ -22,6 +22,13 @@ from .browser_tools import (
     browser_screenshot,
     browser_type,
 )
+from .desktop_tools import (
+    click_at,
+    computer_use,
+    press_key,
+    screenshot_save,
+    type_text,
+)
 from .delegate_tool import delegate
 from .document_tools import create_pdf, create_powerpoint, create_word_document
 from .forge_tools import forget_skill, list_skills, save_skill
@@ -58,10 +65,19 @@ ALL_TOOLS: List[Tool] = [
     delegate, save_skill, list_skills, forget_skill,
     run_shell_command, open_application, take_screenshot,
     get_system_info, control_media, clipboard,
+    computer_use, click_at, type_text, press_key, screenshot_save,
 ]
 
 # Tools that mutate the system and should ask for confirmation when enabled.
-DANGEROUS_TOOLS = {"run_shell_command", "delete_file", "open_application"}
+DANGEROUS_TOOLS = {
+    "run_shell_command",
+    "delete_file",
+    "open_application",
+    "computer_use",
+    "click_at",
+    "type_text",
+    "press_key",
+}
 
 
 def _register_module(registry: "ToolRegistry", module: ModuleType) -> None:
