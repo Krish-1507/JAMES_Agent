@@ -28,6 +28,7 @@ class Agent:
         )
         self.confirm = confirm or self._default_confirm
         self._nudge = nudge
+        self.on_tool = None  # optional hook(name, args, result) called after each tool
         self.system_prompt = build_system_prompt()
 
     @staticmethod
@@ -90,6 +91,9 @@ class Agent:
                         result_text = self.registry.execute(tc.name, tc.arguments).output
                 else:
                     result_text = self.registry.execute(tc.name, tc.arguments).output
+
+                if self.on_tool:
+                    self.on_tool(tc.name, tc.arguments, result_text)
 
                 messages.append(
                     {"role": "tool", "tool_call_id": tc.id, "content": result_text}

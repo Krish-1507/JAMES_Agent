@@ -66,10 +66,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="Validate configuration and exit.")
     parser.add_argument("--new-tool", metavar="NAME", help="Scaffold a new plugin tool file in ./plugins/.")
     parser.add_argument("--ui", action="store_true", help="Launch the optional PyQt5 orb GUI.")
+    parser.add_argument("--doctor", action="store_true", help="Run self-diagnostic checks and exit.")
+    parser.add_argument("command", nargs="?", help="Optional command: 'doctor'.")
     args = parser.parse_args(argv)
 
     if args.new_tool:
         return _scaffold_tool(args.new_tool)
+
+    if args.doctor or args.command == "doctor":
+        from james.core.doctor import run_diagnostics
+
+        text = run_diagnostics()
+        try:
+            print(text)
+        except UnicodeEncodeError:
+            sys.stdout.buffer.write(text.encode("utf-8", "replace"))
+        return 0
 
     if args.provider:
         settings.llm.provider = args.provider.lower()

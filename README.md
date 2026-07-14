@@ -77,7 +77,18 @@ combines their results — split a big job across threads in one request.
 ## 🖥️ Optional GUI
 
 Prefer a visual shell? `pip install pyqt5` then `python -m james --ui` launches the
-orb interface (assistant runs in a worker thread, log streams to the window).
+**orb interface**: a live status orb, a **task canvas** that lists every tool the
+agent calls in real time, **streaming** replies (revealed word-by-word), a full log,
+and a **system tray** icon to hide/show/quit. The assistant runs in a worker thread.
+
+## 🩺 Doctor & resilience
+
+- **`python -m james doctor`** — one-shot self-diagnostic that reports PASS/WARN/FAIL
+  for Python version, core/optional deps, API keys, microphone, `.env`, writable
+  workspace, and the Playwright browser. Great for bug reports and first-run checks.
+- **Model failover** — set `LLM_FAILOVER="anthropic:claude-3-5-sonnet-latest,groq:llama-3.3-70b-versatile"`
+  and JAMES automatically retries the next provider if the primary errors (rate limits,
+  outages) so a task never dies mid-flight.
 
 ---
 
@@ -100,6 +111,7 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -e .
 cp .env.example .env      # edit: set LLM_PROVIDER + API key (or custom for Ollama)
 python -m james --check
+python -m james doctor     # self-diagnostics (deps, keys, mic, browser…)
 python -m james --text    # or: python -m james --ui
 ```
 

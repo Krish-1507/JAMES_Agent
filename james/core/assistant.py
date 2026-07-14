@@ -41,12 +41,21 @@ class Assistant:
         configure_delegate(self.llm)
         configure_forge(self.registry)
         scheduler.start()
+        self.on_event = None  # GUI hook: receives dict events (type: user|thinking|reply|speak)
+
+    def _emit(self, event: dict) -> None:
+        if self.on_event:
+            try:
+                self.on_event(event)
+            except Exception:
+                pass
 
     def speak(self, text: str) -> None:
         text = (text or "").strip()
         if not text:
             return
         console.print(f"[bold cyan]{settings.assistant.name}:[/bold cyan] {text}")
+        self._emit({"type": "speak", "text": text})
         try:
             self.tts.speak(text)
         except Exception as exc:
@@ -59,12 +68,15 @@ class Assistant:
     def handle_turn(self, user_text: str) -> None:
         if not user_text:
             return
+        self._emit({"type": "user", "text": user_text})
         console.print(f"[green]{settings.assistant.user_name}:[/green] {user_text}")
         try:
+            self._emit({"type": "thinking"})
             reply = self.think(user_text)
         except Exception as exc:
             reply = f"Something went wrong: {exc}"
             self.log.exception("Agent error")
+        self._emit({"type": "reply", "text": reply})
         self.speak(reply)
 
     def greet(self) -> None:

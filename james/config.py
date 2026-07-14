@@ -53,6 +53,10 @@ class LLMSettings:
     temperature: float = field(default_factory=lambda: _float("LLM_TEMPERATURE", 0.4))
     max_tokens: int = field(default_factory=lambda: _int("LLM_MAX_TOKENS", 2048))
     timeout: int = field(default_factory=lambda: _int("LLM_TIMEOUT", 120))
+    # Ordered failover list: "provider[:model]" entries tried after the primary on error.
+    failover: list[str] = field(
+        default_factory=lambda: [s.strip() for s in _env("LLM_FAILOVER", "").split(",") if s.strip()]
+    )
 
     # provider keys / endpoints
     openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
