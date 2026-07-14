@@ -12,6 +12,9 @@ from ..llm import build_provider
 from ..tools.registry import ToolRegistry
 from ..tools.delegate_tool import configure_delegate
 from ..tools.desktop_tools import configure_computer_use
+from ..tools.research_tools import configure_research
+from ..tools.background_tools import configure_background
+from ..tools.file_manager_tools import configure_file_manager, start_file_manager_daemon, stop_file_manager_daemon
 from ..tools.forge_tools import configure_forge
 from ..core.scheduler import scheduler
 from ..core.guard import install_offline_guard
@@ -53,7 +56,12 @@ class Assistant:
         self._forged_tasks: set = set()
         configure_delegate(self.llm, on_tool=self._on_tool, on_tool_start=self._on_tool_start)
         configure_computer_use(self.llm)
+        configure_research(self.llm)
+        configure_background(self.llm)
         configure_forge(self.registry)
+        configure_file_manager(self.llm)
+        if settings.assistant.auto_file_manager:
+            start_file_manager_daemon()
         scheduler.start()
         self.on_event = None  # GUI hook: receives dict events (type: user|thinking|reply|speak)
 
@@ -196,4 +204,5 @@ class Assistant:
             else:
                 self.text_loop()
         finally:
+            stop_file_manager_daemon()
             scheduler.stop()

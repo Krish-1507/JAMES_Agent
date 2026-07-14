@@ -15,10 +15,11 @@ class Agent:
         self,
         llm: LLMProvider,
         registry: ToolRegistry,
-        max_iterations: int = 10,
+        max_iterations: int = 20,
         confirm_dangerous: Optional[bool] = None,
         confirm: Optional[Callable[[str, dict], bool]] = None,
         nudge: bool = True,
+        system_prompt: Optional[str] = None,
     ):
         self.llm = llm
         self.registry = registry
@@ -33,7 +34,7 @@ class Agent:
         self.on_tool_start = None  # on_tool_start(call_id, name, args)
         self.on_tool = None        # on_tool(call_id, name, args, result)
         self._tool_seq = 0
-        self.system_prompt = build_system_prompt()
+        self.system_prompt = system_prompt or build_system_prompt()
 
     @staticmethod
     def _default_confirm(name: str, args: dict) -> bool:

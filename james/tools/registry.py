@@ -29,14 +29,26 @@ from .desktop_tools import (
     screenshot_save,
     type_text,
 )
+from .research_tools import learn_skill, research
+from .background_tools import (
+    background_task,
+    get_background_result,
+    list_background_tasks,
+)
 from .delegate_tool import delegate
 from .document_tools import create_pdf, create_powerpoint, create_word_document
+from .file_manager_tools import list_file_manager_tasks, manage_files, stop_file_manager
 from .forge_tools import forget_skill, list_skills, save_skill
 from .mcp_tools import discover_mcp_tools
 from .file_tools import (
+    create_directory,
+    copy_file,
     delete_file,
+    directory_tree,
     list_directory,
+    move_file,
     read_file,
+    rename_file,
     search_files,
     write_file,
 )
@@ -66,6 +78,10 @@ ALL_TOOLS: List[Tool] = [
     run_shell_command, open_application, take_screenshot,
     get_system_info, control_media, clipboard,
     computer_use, click_at, type_text, press_key, screenshot_save,
+    create_directory, copy_file, move_file, rename_file, directory_tree,
+    research, learn_skill,
+    background_task, list_background_tasks, get_background_result,
+    manage_files, list_file_manager_tasks, stop_file_manager,
 ]
 
 # Tools that mutate the system and should ask for confirmation when enabled.
@@ -77,6 +93,9 @@ DANGEROUS_TOOLS = {
     "click_at",
     "type_text",
     "press_key",
+    "move_file",
+    "rename_file",
+    "manage_files",
 }
 
 

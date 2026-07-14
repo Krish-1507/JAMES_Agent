@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 try:
     from dotenv import load_dotenv
@@ -118,6 +118,15 @@ class AssistantSettings:
 
     # Self-improving Skill Forge: auto-generate a native @tool from a successful multi-tool task.
     auto_skill: bool = field(default_factory=lambda: _bool("AUTO_SKILL", True))
+
+    # Autonomous File Explorer Manager: let JAMES take 100% agentic control of the
+    # filesystem in the background. AUTO_FILE_MANAGER launches a daemon that keeps the
+    # user's main folders organised on an interval.
+    auto_file_manager: bool = field(default_factory=lambda: _bool("AUTO_FILE_MANAGER", False))
+    file_manager_interval: int = field(default_factory=lambda: _int("FILE_MANAGER_INTERVAL", 1800))
+    file_manager_scopes: List[str] = field(
+        default_factory=lambda: [s.strip() for s in _env("FILE_MANAGER_SCOPES", "Desktop,Documents,Downloads").split(",") if s.strip()]
+    )
 
     # Privacy-certified local mode: block ALL non-loopback network egress and audit every attempt.
     offline_mode: bool = field(default_factory=lambda: _bool("OFFLINE_MODE", False))

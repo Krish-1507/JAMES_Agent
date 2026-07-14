@@ -114,3 +114,121 @@ def delete_file(path: str) -> ToolResult:
     else:
         p.unlink()
     return ToolResult(ok=True, output=f"Deleted {p}")
+
+
+@tool(
+    "create_directory",
+    "Create a directory and any missing parent directories.",
+    {"path": {"type": "string", "description": "Directory path to create."}},
+    required=["path"],
+)
+def create_directory(path: str) -> ToolResult:
+    p = _resolve(path)
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+        return ToolResult(ok=True, output=f"Created directory {p}")
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Could not create directory: {exc}")
+
+
+@tool(
+    "copy_file",
+    "Copy a file or directory to a new location (directories are copied recursively).",
+    {
+        "src": {"type": "string", "description": "Source path."},
+        "dst": {"type": "string", "description": "Destination path."},
+    },
+    required=["src", "dst"],
+)
+def copy_file(src: str, dst: str) -> ToolResult:
+    import shutil
+
+    s, d = _resolve(src), _resolve(dst)
+    if not s.exists():
+        return ToolResult(ok=False, output=f"Source not found: {s}")
+    try:
+        if s.is_dir():
+            shutil.copytree(s, d, dirs_exist_ok=True)
+        else:
+            d.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(s, d)
+        return ToolResult(ok=True, output=f"Copied {s} -> {d}")
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Copy failed: {exc}")
+
+
+@tool(
+    "move_file",
+    "Move or rename a file/directory to a new location. Destructive if it overwrites.",
+    {
+        "src": {"type": "string", "description": "Source path."},
+        "dst": {"type": "string", "description": "Destination path."},
+    },
+    required=["src", "dst"],
+)
+def move_file(src: str, dst: str) -> ToolResult:
+    import shutil
+
+    s, d = _resolve(src), _resolve(dst)
+    if not s.exists():
+        return ToolResult(ok=False, output=f"Source not found: {s}")
+    try:
+        d.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(s), str(d))
+        return ToolResult(ok=True, output=f"Moved {s} -> {d}")
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Move failed: {exc}")
+
+
+@tool(
+    "rename_file",
+    "Rename a file or directory (within the same parent folder).",
+    {
+        "path": {"type": "string", "description": "Current path."},
+        "new_name": {"type": "string", "description": "New name (not a full path)."},
+    },
+    required=["path", "new_name"],
+)
+def rename_file(path: str, new_name: str) -> ToolResult:
+    p = _resolve(path)
+    if not p.exists():
+        return ToolResult(ok=False, output="Path does not exist.")
+    dst = p.parent / new_name
+    try:
+        p.rename(dst)
+        return ToolResult(ok=True, output=f"Renamed {p.name} -> {new_name}")
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Rename failed: {exc}")
+
+
+@tool(
+    "directory_tree",
+    "Show a tree view of a directory's contents (files and folders), up to a max depth.",
+    {
+        "path": {"type": "string", "description": "Directory path (defaults to workspace)."},
+        "max_depth": {"type": "integer", "description": "Maximum folder depth to display (default 3)."},
+    },
+)
+def directory_tree(path: str = "", max_depth: int = 3) -> ToolResult:
+    base = _resolve(path) if path else settings.assistant.workspace_dir
+    if not base.exists():
+        return ToolResult(ok=False, output=f"Directory not found: {base}")
+    lines: List[str] = []
+
+    def _walk(d: Path, depth: int, prefix: str):
+        if depth > max_depth:
+            return
+        try:
+            items = sorted(d.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+        except Exception:
+            return
+        for i, item in enumerate(items):
+            last = i == len(items) - 1
+            branch = "+-- " if last else "|-- "
+            lines.append(f"{prefix}{branch}{item.name}{'/' if item.is_dir() else ''}")
+            if item.is_dir():
+                _walk(item, depth + 1, prefix + ("    " if last else "|   "))
+
+    lines.append(base.name + "/")
+    _walk(base, 1, "")
+    return ToolResult(ok=True, output="\n".join(lines) or "(empty)")

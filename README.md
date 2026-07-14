@@ -30,6 +30,11 @@ JAMES is provider-agnostic and modular. You can use OpenAI, Anthropic, Google Ge
 | Delegation | `delegate` — fan out subtasks to isolated sub-agents in parallel |
 | MCP | Connect any Model Context Protocol server; its tools appear automatically |
 | Skill Forge | `save_skill`, `list_skills`, `forget_skill` — and automatic generation of native tools |
+| Research | `research` — look a topic up on the web, read the top sources, and return a cited answer |
+| Learning | `learn_skill` — research a goal, then write and save a new native `@tool` that implements it (JAMES teaches itself) |
+| Background | `background_task`, `list_background_tasks`, `get_background_result` — run long or independent work asynchronously |
+| File ops | `create_directory`, `copy_file`, `move_file`, `rename_file`, `directory_tree` — manage the whole file tree |
+| File Manager | `manage_files`, `list_file_manager_tasks`, `stop_file_manager` — take 100% agentic control of the file explorer and organise it in the background |
 
 ## Quick start
 
@@ -134,6 +139,29 @@ Self-improving Skill Forge (automatic): with `AUTO_SKILL=true` (the default), af
 
 `delegate` spins up isolated sub-agents for parallel subtasks and combines their results, so you can split a big job across threads in a single request. Sub-agent tool calls stream into the same live task canvas as the parent.
 
+### Research and self-learning
+
+JAMES is built to be self-learning: it looks things up, teaches itself new skills, and grows more capable the more you use it.
+
+- `research(query)` searches the web, reads the top sources, and returns a concise cited answer. Use it whenever the task needs current facts or how-to context.
+- `learn_skill(goal)` researches the goal, asks the model to write a native `@tool` plugin that implements it, and saves it to `./plugins/` where it is hot-loaded and available immediately. This is the self-improving loop: research, understand, and turn it into executable code — no re-prompting next time.
+
+The system prompt is explicit: whenever JAMES lacks a capability it must research it and learn it, then use the skill it just created. Combined with the auto Skill Forge (above), JAMES becomes more capable after every real task rather than forgetting what it did.
+
+### Background execution
+
+`background_task(task)` runs a request in an isolated sub-agent on a daemon thread and returns a task id right away, so JAMES can keep helping you while the work continues. Later, `get_background_result(id)` returns the outcome and `list_background_tasks()` shows everything in flight. Background tasks are persisted, so they survive restarts.
+
+### Full file-explorer control
+
+Beyond read/write/search/delete, JAMES can `create_directory`, `copy_file`, `move_file`, `rename_file`, and render a `directory_tree`. It manages your files proactively as part of completing a task. Destructive file operations (delete, move, rename) ask for confirmation unless disabled.
+
+### Autonomous File Explorer Manager
+
+`manage_files(scope, goal)` lets JAMES take full, 100% agentic control of a part of the filesystem and run the job in the background. It explores the directory tree, organises files by type or date, removes or quarantines duplicates, tidies names, and reports back — without interrupting you. The scope can be `desktop`, `documents`, `downloads`, `workspace`, `home`, `whole`, or any absolute path. It is fully autonomous: no confirmation prompts, no stop-and-ask, it works until the location is tidy. Track it with `list_file_manager_tasks` / `stop_file_manager`.
+
+Enable `AUTO_FILE_MANAGER=true` to start a daemon that keeps your main folders (Desktop, Documents, Downloads, ...) organised on a schedule, so the file explorer manages itself. Set `FILE_MANAGER_INTERVAL` (seconds) and `FILE_MANAGER_SCOPES` to tune it.
+
 ## Optional GUI
 
 Prefer a visual shell? Install the UI extra, then run `python -m james --ui` to launch the orb interface: a live status orb, a task canvas that lists every tool the agent calls in real time, streaming replies revealed word by word, a full log, and a system tray icon to hide, show, and quit. The assistant runs in a worker thread.
@@ -226,6 +254,7 @@ Register it in `james/tools/registry.py` (add `translate_text` to `ALL_TOOLS`) a
 - [x] Computer-use vision loop (screenshot to act), local and cloud-free
 - [x] Privacy-certified offline mode with egress audit log
 - [x] Self-improving Skill Forge that auto-generates native `@tool` plugins
+- [x] Autonomous File Explorer Manager: 100% agentic background file organisation (`manage_files`)
 - [ ] Plugin marketplace for community tools
 - [ ] Mobile companion app
 
