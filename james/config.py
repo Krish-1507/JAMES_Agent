@@ -1,24 +1,106 @@
 """Central configuration for JAMES.
 
 Loads everything from environment variables (a `.env` file is supported via
-python-dotenv). Every value is overridable so the project works out-of-the-box
+python-dotenv). Supports encrypted `.env.gpg` files for protecting API keys
+at rest. Every value is overridable so the project works out-of-the-box
 in text-only mode without any API keys, and scales up to any provider.
 """
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
 try:
     from dotenv import load_dotenv
-
-    load_dotenv()
 except Exception:  # pragma: no cover - dotenv is optional at import time
-    pass
+    load_dotenv = None
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _decrypt_env_gpg(env_gpg_path: Path) -> dict[str, str]:
+    try:
+        result = subprocess.run(
+            ["gpg", "--batch", "--quiet", "--decrypt", str(env_gpg_path)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return {}
+        env_vars: dict[str, str] = {}
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            env_vars[key.strip()] = value.strip()
+        return env_vars
+    except Exception:
+        return {}
+
+
+def _load_env_file() -> None:
+    env_path = PROJECT_ROOT / ".env"
+    env_gpg_path = PROJECT_ROOT / ".env.gpg"
+    if env_gpg_path.exists():
+        decrypted = _decrypt_env_gpg(env_gpg_path)
+        for key, value in decrypted.items():
+            if key not in os.environ:
+                os.environ[key] = value
+    elif env_path.exists():
+        try:
+            from dotenv import load_dotenv
+
+            load_dotenv(str(env_path))
+        except Exception:
+            pass
+        _warn_env_permissions(env_path)
+        _load_tool_permissions(env_path)
+
+
+def _load_tool_permissions(env_path: Path) -> None:
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().lower()
+            if key.startswith("TOOL_") and value in ("true", "false"):
+                tool_name = key[5:]
+                if value == "false" and tool_name not in settings.assistant.denied_tools:
+                    settings.assistant.denied_tools.append(tool_name)
+                elif value == "true" and tool_name in settings.assistant.denied_tools:
+                    settings.assistant.denied_tools.remove(tool_name)
+    except Exception:
+        pass
+
+
+def _warn_env_permissions(env_path: Path) -> None:
+    try:
+        if hasattr(os, "getuid") and os.getuid() == 0:
+            return
+        mode = env_path.stat().st_mode
+        world_readable = bool(mode & 0o004)
+        group_readable = bool(mode & 0o040)
+        if world_readable or group_readable:
+            import warnings
+
+            warnings.warn(
+                f".env file at {env_path} is {'world' if world_readable else 'group'}-readable. "
+                "API keys may be exposed. Run: chmod 600 .env",
+                stacklevel=3,
+            )
+    except Exception:
+        pass
+
+
+_load_env_file()
 
 
 def _env(key: str, default: str = "") -> str:
@@ -134,6 +216,17 @@ class AssistantSettings:
         default_factory=lambda: Path(_env("EGRESS_AUDIT_LOG", "./workspace/james_egress.log")).resolve()
     )
 
+    # Per-tool permission granularity: allow or deny specific tools by name.
+    # Empty means use the default DANGEROUS_TOOLS binary mode.
+    # When set, only tools in allowed_tools are permitted (denied_tools is ignored).
+    # Can also be configured in .env as TOOL_<name>=true/false
+    allowed_tools: List[str] = field(
+        default_factory=lambda: [s.strip() for s in _env("ALLOWED_TOOLS", "").split(",") if s.strip()]
+    )
+    denied_tools: List[str] = field(
+        default_factory=lambda: [s.strip() for s in _env("DENIED_TOOLS", "").split(",") if s.strip()]
+    )
+
     # Vision model for computer-use / image understanding (defaults to the main LLM model).
     vision_model: str = field(default_factory=lambda: _env("VISION_MODEL", ""))
 
@@ -160,3 +253,15 @@ class Settings:
 
 # A single shared instance used across the application.
 settings = Settings()
+
+
+def configure_settings(overrides: dict | None = None) -> Settings:
+    """Create a fresh Settings instance, optionally with overrides.
+
+    Useful for testing — avoids module-level singleton state leaking between tests.
+    """
+    if overrides:
+        for key, value in overrides.items():
+            if hasattr(settings, key):
+                setattr(settings, key, value)
+    return settings

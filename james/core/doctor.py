@@ -5,6 +5,7 @@ unwritable workspace, missing browser) in one PASS/WARN/FAIL report.
 """
 from __future__ import annotations
 
+import asyncio
 import sys
 
 from ..config import settings
@@ -12,6 +13,29 @@ from ..config import settings
 
 def _line(mark: str, name: str, detail: str = "") -> str:
     return f"[{mark}] {name}" + (f" — {detail}" if detail else "")
+
+
+def _run_async(coro):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None and loop.is_running():
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, coro)
+            return future.result()
+    return asyncio.run(coro)
+
+
+async def _probe(spec):
+    from ..tools.mcp_tools import _with_session
+
+    async def _list(session):
+        return (await session.list_tools()).tools
+
+    return await asyncio.wait_for(_with_session(spec, _list), timeout=15)
 
 
 def run_diagnostics() -> str:
@@ -68,18 +92,9 @@ def run_diagnostics() -> str:
 
         specs = load_mcp_configs()
         if specs:
-            import asyncio
-
             for spec in specs:
                 try:
-
-                    async def _probe(s):
-                        async def _list(session):
-                            return (await session.list_tools()).tools
-
-                        return await asyncio.wait_for(_with_session(s, _list), timeout=15)
-
-                    tools = asyncio.run(_probe(spec))
+                    tools = _run_async(_probe(spec))
                     out.append(_line("PASS", f"MCP '{spec.name}' ({len(tools)} tool(s))"))
                 except Exception as exc:
                     out.append(_line("WARN", f"MCP '{spec.name}' unreachable", str(exc)[:80]))

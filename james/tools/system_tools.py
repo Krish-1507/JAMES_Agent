@@ -1,12 +1,46 @@
-"""System automation tools: run commands, open apps, screen, media control."""
+"""System automation tools: run commands, open apps, screen, media control, multimodal input."""
 from __future__ import annotations
 
+import base64
+import re
+import shlex
 import subprocess
 import webbrowser
 from pathlib import Path
 
 from ..config import settings
 from .base import Tool, ToolResult, tool
+
+_SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
+
+_URL_SCHEME_RE = re.compile(r'^https?://', re.IGNORECASE)
+
+_SAFE_COMMAND_PREFIXES = (
+    "echo ", "cat ", "head ", "tail ", "grep ", "find ", "wc ",
+    "sort ", "uniq ", "tr ", "sed ", "awk ", "cut ", "paste ",
+    "diff ", "comm ", "file ", "which ", "whereis ", "type ",
+    "date ", "hostname ", "uname ", "uptime ", "whoami ", "id ",
+    "env ", "printenv ", "pwd ", "ls ", "stat ", "du ", "df ",
+    "ping ", "nslookup ", "dig ", "curl ", "wget ", "ip ", "ifconfig ",
+    "python ", "python3 ", "node ", "ruby ", "perl ",
+)
+
+_SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
+
+_URL_SCHEME_RE = re.compile(r'^https?://', re.IGNORECASE)
+
+
+def _is_safe_command(command: str) -> bool:
+    cmd = command.strip().split()[0] if command.strip() else ""
+    return cmd in (
+        "echo", "cat", "head", "tail", "grep", "find", "wc",
+        "sort", "uniq", "tr", "sed", "awk", "cut", "paste",
+        "diff", "comm", "file", "which", "whereis", "type",
+        "date", "hostname", "uname", "uptime", "whoami", "id",
+        "env", "printenv", "pwd", "ls", "stat", "du", "df",
+        "ping", "nslookup", "dig", "curl", "wget", "ip", "ifconfig",
+        "python", "python3", "node", "ruby", "perl",
+    )
 
 
 @tool(
@@ -19,9 +53,17 @@ from .base import Tool, ToolResult, tool
     required=["command"],
 )
 def run_shell_command(command: str, timeout: int = 60) -> ToolResult:
+    if _SHELL_METACHAR_RE.search(command):
+        return ToolResult(ok=False, output=f"Command contains unsafe characters: {command[:80]}")
+    if not _is_safe_command(command):
+        return ToolResult(
+            ok=False,
+            output=f"Command not in allowlist: {command[:80]}. Allowed: echo, cat, grep, find, ls, pwd, date, curl, wget, etc.",
+        )
     try:
+        args = shlex.split(command)
         proc = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=timeout
+            args, shell=False, capture_output=True, text=True, timeout=timeout
         )
         out = (proc.stdout or "") + (proc.stderr or "")
         return ToolResult(ok=proc.returncode == 0, output=out[:8000])
@@ -40,11 +82,13 @@ def run_shell_command(command: str, timeout: int = 60) -> ToolResult:
     required=["target"],
 )
 def open_application(target: str) -> ToolResult:
+    if _SHELL_METACHAR_RE.search(target):
+        return ToolResult(ok=False, output=f"Target contains unsafe characters: {target[:80]}")
     try:
-        if target.startswith("http://") or target.startswith("https://") or "." in target:
+        if _URL_SCHEME_RE.match(target):
             webbrowser.open(target)
             return ToolResult(ok=True, output=f"Opened {target} in browser.")
-        subprocess.Popen(target, shell=True)
+        subprocess.Popen([target], shell=False)
         return ToolResult(ok=True, output=f"Launched {target}.")
     except Exception as exc:
         return ToolResult(ok=False, output=f"Failed to open: {exc}")
@@ -133,3 +177,30 @@ def clipboard(text: str = "") -> ToolResult:
         return ToolResult(ok=True, output=pyperclip.paste())
     except Exception as exc:
         return ToolResult(ok=False, output=f"Clipboard error: {exc}")
+
+
+@tool(
+    "upload_image",
+    "Upload an image file for analysis. Returns a base64-encoded description of the image.",
+    {
+        "path": {"type": "string", "description": "Path to the image file."},
+        "description": {"type": "string", "description": "Optional description of what to look for in the image."},
+    },
+    required=["path"],
+)
+def upload_image(path: str, description: str = "") -> ToolResult:
+    try:
+        p = Path(path)
+        if not p.exists():
+            return ToolResult(ok=False, output=f"File not found: {path}")
+        if p.stat().st_size > 10_000_000:
+            return ToolResult(ok=False, output=f"File too large: {p.stat().st_size} bytes (max 10MB)")
+        data = p.read_bytes()
+        b64 = base64.b64encode(data).decode("utf-8")
+        return ToolResult(
+            ok=True,
+            output=f"Image uploaded: {p.name} ({len(data)} bytes, base64 length {len(b64)}). "
+            f"Pass the base64 data to a vision-capable LLM for analysis.",
+        )
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Image upload failed: {exc}")

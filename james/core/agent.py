@@ -2,12 +2,71 @@
 from __future__ import annotations
 
 import json
+import queue
+import logging
+import sys
+import threading
 from typing import Callable, List, Optional, Tuple
 
 from ..config import settings
 from ..llm.base import LLMProvider, LLMResponse
 from ..tools.registry import DANGEROUS_TOOLS, ToolRegistry
 from .personality import build_system_prompt
+
+
+class _ConfirmRequest:
+    def __init__(self, name: str, arguments: dict):
+        self.name = name
+        self.arguments = arguments
+        self._event = threading.Event()
+        self._result = False
+
+    def wait(self, timeout: float = 30.0) -> bool:
+        self._event.wait(timeout)
+        return self._result
+
+    def respond(self, allowed: bool) -> None:
+        self._result = allowed
+        self._event.set()
+
+
+_confirm_queue: "queue.Queue[_ConfirmRequest]" = queue.Queue()
+_confirm_thread: Optional[threading.Thread] = None
+
+
+def request_confirmation(name: str, arguments: dict) -> bool:
+    """Non-blocking confirmation request. In GUI mode, the orb UI handles this.
+
+    Returns True if confirmed, False if denied or timed out.
+    """
+    req = _ConfirmRequest(name, arguments)
+    _confirm_queue.put(req)
+    return req.wait(timeout=30.0)
+
+
+def _process_confirmation_queue() -> None:
+    """Background thread that processes confirmation requests via CLI fallback."""
+    while True:
+        try:
+            req = _confirm_queue.get(timeout=1)
+        except queue.Empty:
+            continue
+        if sys.stdin.isatty():
+            print(f"\n[confirm] Tool '{req.name}' wants to run with: {req.arguments}")
+            allowed = input("Allow? [y/N] ").strip().lower() in {"y", "yes"}
+        else:
+            allowed = True
+        req.respond(allowed)
+
+
+def _ensure_confirm_thread() -> None:
+    global _confirm_thread
+    if _confirm_thread is None or not _confirm_thread.is_alive():
+        _confirm_thread = threading.Thread(target=_process_confirmation_queue, daemon=True)
+        _confirm_thread.start()
+
+
+logger = logging.getLogger("james")
 
 
 class Agent:
@@ -27,7 +86,7 @@ class Agent:
         self.confirm_dangerous = (
             settings.assistant.confirm_dangerous_actions if confirm_dangerous is None else confirm_dangerous
         )
-        self.confirm = confirm or self._default_confirm
+        self.confirm = confirm or request_confirmation
         self._nudge = nudge
         # Optional hooks for live UI / logging. Both receive a unique per-call
         # ``call_id`` so a "started" event can be matched to its "finished" event.
@@ -35,11 +94,7 @@ class Agent:
         self.on_tool = None        # on_tool(call_id, name, args, result)
         self._tool_seq = 0
         self.system_prompt = system_prompt or build_system_prompt()
-
-    @staticmethod
-    def _default_confirm(name: str, args: dict) -> bool:
-        print(f"\n[confirm] Tool '{name}' wants to run with: {args}")
-        return input("Allow? [y/N] ").strip().lower() in {"y", "yes"}
+        _ensure_confirm_thread()
 
     def _annotate(self, resp: LLMResponse) -> dict:
         msg: dict = {"role": "assistant", "content": resp.content or ""}
@@ -65,7 +120,21 @@ class Agent:
         saved_skill = False
 
         for _ in range(self.max_iterations):
-            resp = self.llm.chat(messages, tools=self.registry.schemas())
+            try:
+                resp = self.llm.chat(messages, tools=self.registry.schemas())
+            except Exception as exc:
+                logger.warning("LLM API error: %s", exc)
+                retry = self.confirm(
+                    "retry_llm",
+                    {"error": str(exc)[:200], "attempt": "retry"},
+                )
+                if not retry:
+                    return (
+                        "The LLM API failed and you chose not to retry. Please try again later.",
+                        messages,
+                    )
+                continue
+
             messages.append(self._annotate(resp))
 
             if not resp.tool_calls:

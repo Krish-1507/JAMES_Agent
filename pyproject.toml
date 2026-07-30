@@ -89,5 +89,20 @@ Issues = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/
 [project.scripts]
 james = "james.__main__:main"
 
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
 [tool.setuptools.packages.find]
 include = ["james*"]

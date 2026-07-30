@@ -8,6 +8,7 @@ research -> understand -> turn it into executable code.
 """
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 from ..config import settings
@@ -28,15 +29,7 @@ def _gather_sources(query: str, max_sources: int) -> List[str]:
     search = web_search(query, max_results=max(3, min(max_sources, 8)))
     if not search.ok:
         return parts
-    # Extract URLs from the "  <url>" lines the search tool emits.
-    urls = []
-    for line in search.output.splitlines():
-        line = line.strip()
-        if line.startswith("•"):
-            # format: "• Title\n  url"
-            continue
-        if line.startswith("http://") or line.startswith("https://"):
-            urls.append(line.strip())
+    urls = _extract_urls(search.output)
     for url in urls[:max_sources]:
         try:
             res = fetch_url(url, max_chars=4000)
@@ -45,6 +38,38 @@ def _gather_sources(query: str, max_sources: int) -> List[str]:
         except Exception:
             continue
     return parts
+
+
+_DDG_REDIRECT_RE = re.compile(r'^/l/\?uddg=(.+)$', re.IGNORECASE)
+_URL_RE = re.compile(r'https?://[^\s<>"]+')
+
+
+def _extract_urls(text: str) -> List[str]:
+    urls: List[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("•"):
+            continue
+        m = _DDG_REDIRECT_RE.match(line)
+        if m:
+            from urllib.parse import unquote
+
+            decoded = unquote(m.group(1))
+            if decoded.startswith("http://") or decoded.startswith("https://"):
+                urls.append(decoded)
+            continue
+        if line.startswith("http://") or line.startswith("https://"):
+            urls.append(line)
+            continue
+        for candidate in _URL_RE.findall(line):
+            urls.append(candidate)
+    seen: set[str] = set()
+    unique: List[str] = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            unique.append(u)
+    return unique
 
 
 @tool(

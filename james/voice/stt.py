@@ -49,11 +49,21 @@ class WhisperApiSTT(STTProvider):
         audio = self._record()
         if not audio:
             return ""
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            f.write(audio.get_wav_data())
-            path = f.name
-        resp = self.client.audio.transcriptions.create(model="whisper-1", file=open(path, "rb"))
-        return resp.text or ""
+        path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                f.write(audio.get_wav_data())
+                path = f.name
+            resp = self.client.audio.transcriptions.create(model="whisper-1", file=open(path, "rb"))
+            return resp.text or ""
+        finally:
+            if path:
+                try:
+                    import os
+
+                    os.unlink(path)
+                except OSError:
+                    pass
 
 
 class WhisperLocalSTT(STTProvider):
@@ -67,11 +77,21 @@ class WhisperLocalSTT(STTProvider):
         audio = self._record()
         if not audio:
             return ""
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            f.write(audio.get_wav_data())
-            path = f.name
-        result = self.model.transcribe(path)
-        return result.get("text", "").strip()
+        path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                f.write(audio.get_wav_data())
+                path = f.name
+            result = self.model.transcribe(path)
+            return result.get("text", "").strip()
+        finally:
+            if path:
+                try:
+                    import os
+
+                    os.unlink(path)
+                except OSError:
+                    pass
 
 
 class TextSTT(STTProvider):

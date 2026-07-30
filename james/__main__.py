@@ -66,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="Validate configuration and exit.")
     parser.add_argument("--new-tool", metavar="NAME", help="Scaffold a new plugin tool file in ./plugins/.")
     parser.add_argument("--ui", action="store_true", help="Launch the optional PyQt5 orb GUI.")
+    parser.add_argument("--web-dashboard", action="store_true", help="Launch the web-based dashboard.")
+    parser.add_argument("--eval", metavar="SUITE", help="Run a benchmark suite and print results.")
     parser.add_argument("--offline", action="store_true", help="Privacy mode: block ALL non-local network egress (audited).")
     parser.add_argument("--doctor", action="store_true", help="Run self-diagnostic checks and exit.")
     parser.add_argument("command", nargs="?", help="Optional command: 'doctor'.")
@@ -99,6 +101,30 @@ def main(argv: list[str] | None = None) -> int:
         from james.ui import run_ui
 
         return run_ui()
+
+    if args.web_dashboard:
+        from james.ui.dashboard import start_dashboard
+
+        start_dashboard()
+        print("Dashboard running on http://127.0.0.1:8123")
+        print("Press Ctrl+C to stop.")
+        try:
+            while True:
+                import time
+
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nDashboard stopped.")
+            return 0
+
+    if args.eval:
+        from james.evaluation import run_benchmark
+
+        suite_name = args.eval
+        tasks = [{"description": suite_name}]
+        result = run_benchmark(suite_name, tasks, lambda desc, **kw: ("completed", []))
+        print(json.dumps(result, indent=2))
+        return 0
 
     print_banner()
 

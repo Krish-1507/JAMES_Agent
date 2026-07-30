@@ -8,6 +8,10 @@ user (or an auditor) can cryptographically *see* that no data left the machine.
 
 This is stronger than per-tool guards: even the LLM SDKs, the browser, or a
 future plugin cannot phone home, because the underlying socket calls are blocked.
+
+Additionally, httpx, http.client, urllib.request, urllib3, and requests are
+patched to block non-loopback requests at the library level, covering cases
+where socket monkey-patching alone is bypassed by those libraries.
 """
 from __future__ import annotations
 
@@ -23,6 +27,12 @@ _LOCK = threading.Lock()
 _orig_getaddrinfo = socket.getaddrinfo
 _orig_connect = socket.socket.connect
 _orig_create = socket.create_connection
+_orig_httpx_request = None
+_orig_httpx_send = None
+_orig_http_client_request = None
+_orig_urllib_request = None
+_orig_urllib3_request = None
+_orig_requests_request = None
 
 
 class BlockedEgress(Exception):
@@ -103,6 +113,64 @@ def _guarded_create(*args, **kwargs):
     return _orig_create(*args, **kwargs)
 
 
+def _guarded_httpx_request(self, url, **kwargs):
+    from urllib.parse import urlparse
+    parsed = urlparse(str(url))
+    host = parsed.hostname
+    if host and not _is_loopback(host):
+        _audit(host, parsed.port or 443, False)
+        raise BlockedEgress(f"Blocked egress to {host} (offline mode, httpx)")
+    return _orig_httpx_request(self, url, **kwargs)
+
+
+def _guarded_httpx_send(self, request, **kwargs):
+    host = request.url.host if hasattr(request.url, 'host') else None
+    if host and not _is_loopback(host):
+        _audit(host, request.url.port or 443, False)
+        raise BlockedEgress(f"Blocked egress to {host} (offline mode, httpx)")
+    return _orig_httpx_send(self, request, **kwargs)
+
+
+def _guarded_http_client_request(self, url, **kwargs):
+    from urllib.parse import urlparse
+    parsed = urlparse(str(url))
+    host = parsed.hostname
+    if host and not _is_loopback(host):
+        _audit(host, parsed.port or 80, False)
+        raise BlockedEgress(f"Blocked egress to {host} (offline mode, http.client)")
+    return _orig_http_client_request(self, url, **kwargs)
+
+
+def _guarded_urllib_request(url, **kwargs):
+    from urllib.parse import urlparse
+    parsed = urlparse(str(url))
+    host = parsed.hostname
+    if host and not _is_loopback(host):
+        _audit(host, parsed.port or 443, False)
+        raise BlockedEgress(f"Blocked egress to {host} (offline mode, urllib)")
+    return _orig_urllib_request(url, **kwargs)
+
+
+def _guarded_urllib3_request(self, url, **kwargs):
+    from urllib.parse import urlparse
+    parsed = urlparse(str(url))
+    host = parsed.hostname
+    if host and not _is_loopback(host):
+        _audit(host, parsed.port or 443, False)
+        raise BlockedEgress(f"Blocked egress to {host} (offline mode, urllib3)")
+    return _orig_urllib3_request(self, url, **kwargs)
+
+
+def _guarded_requests_request(self, url, **kwargs):
+    from urllib.parse import urlparse
+    parsed = urlparse(str(url))
+    host = parsed.hostname
+    if host and not _is_loopback(host):
+        _audit(host, parsed.port or 443, False)
+        raise BlockedEgress(f"Blocked egress to {host} (offline mode, requests)")
+    return _orig_requests_request(self, url, **kwargs)
+
+
 def install_offline_guard() -> None:
     """Monkey-patch the socket layer to enforce offline mode. Idempotent."""
     global _INSTALLED
@@ -112,6 +180,55 @@ def install_offline_guard() -> None:
         socket.getaddrinfo = _guarded_getaddrinfo
         socket.socket.connect = _guarded_connect
         socket.create_connection = _guarded_create
+
+        try:
+            import httpx
+
+            if not _orig_httpx_request:
+                _orig_httpx_request = httpx.Client.send
+                httpx.Client.send = _guarded_httpx_request
+            if not _orig_httpx_send:
+                _orig_httpx_send = httpx.AsyncClient.send
+                httpx.AsyncClient.send = _guarded_httpx_send
+        except Exception:
+            pass
+
+        try:
+            import http.client
+
+            if not _orig_http_client_request:
+                _orig_http_client_request = http.client.HTTPConnection.request
+                http.client.HTTPConnection.request = _guarded_http_client_request
+        except Exception:
+            pass
+
+        try:
+            import urllib.request
+
+            if not _orig_urllib_request:
+                _orig_urllib_request = urllib.request.urlopen
+                urllib.request.urlopen = _guarded_urllib_request
+        except Exception:
+            pass
+
+        try:
+            import urllib3
+
+            if not _orig_urllib3_request:
+                _orig_urllib3_request = urllib3.PoolManager.request
+                urllib3.PoolManager.request = _guarded_urllib3_request
+        except Exception:
+            pass
+
+        try:
+            import requests
+
+            if not _orig_requests_request:
+                _orig_requests_request = requests.Session.request
+                requests.Session.request = _guarded_requests_request
+        except Exception:
+            pass
+
         _INSTALLED = True
 
 

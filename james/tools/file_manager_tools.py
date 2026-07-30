@@ -125,8 +125,8 @@ class FileManager:
 
         resolved = _resolve_scope(scope)
         prompt = _FILE_MANAGER_PROMPT.format(scope=resolved, goal=goal or "Organise and tidy this location completely.")
-        # The background manager is fully autonomous: no confirmation prompts, no nudges.
-        agent = Agent(self._llm, child, max_iterations=50, confirm_dangerous=False, nudge=False, system_prompt=prompt)
+        # The background manager respects the global confirmation setting.
+        agent = Agent(self._llm, child, max_iterations=50, confirm_dangerous=settings.assistant.confirm_dangerous_actions, nudge=False, system_prompt=prompt)
 
         tid = uuid.uuid4().hex[:8]
         record = {

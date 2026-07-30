@@ -6,14 +6,18 @@ superpowers appear without touching core code.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import importlib
+import os
 import pkgutil
 import sys
+import time
 from pathlib import Path
 from types import ModuleType
 from typing import Dict, List
 
-from .base import Tool, ToolResult
+from .base import Tool, ToolResult, tool
 from .browser_tools import (
     browser_click,
     browser_close,
@@ -34,12 +38,14 @@ from .background_tools import (
     background_task,
     get_background_result,
     list_background_tasks,
+    task_dependency_graph,
 )
 from .delegate_tool import delegate
 from .document_tools import create_pdf, create_powerpoint, create_word_document
 from .file_manager_tools import list_file_manager_tasks, manage_files, stop_file_manager
 from .forge_tools import forget_skill, list_skills, save_skill
 from .mcp_tools import discover_mcp_tools
+from .marketplace import install_plugin, list_plugins, remove_plugin, search_plugins
 from .file_tools import (
     create_directory,
     copy_file,
@@ -65,6 +71,26 @@ from .system_tools import (
 from .web_tools import fetch_url, web_search
 from ..config import settings
 
+
+@tool(
+    "help",
+    "List all available JAMES capabilities with a short description of each.",
+    {},
+)
+def help_command() -> ToolResult:
+    lines = []
+    for t in ALL_TOOLS:
+        if settings.assistant.mode == "standard" and t.name in DANGEROUS_TOOLS:
+            continue
+        lines.append(f"- {t.name}: {t.description[:100]}")
+    return ToolResult(ok=True, output="Available tools:\n" + "\n".join(lines))
+
+_AUDIT_KEY = "james-audit-integrity"
+_AUDIT_HMAC_KEY = os.environ.get(
+    "JAMES_AUDIT_HMAC_KEY",
+    "james-audit-secret-change-me-in-production",
+)
+
 # Built-in registry.
 ALL_TOOLS: List[Tool] = [
     read_file, write_file, list_directory, search_files, delete_file,
@@ -82,6 +108,7 @@ ALL_TOOLS: List[Tool] = [
     research, learn_skill,
     background_task, list_background_tasks, get_background_result,
     manage_files, list_file_manager_tasks, stop_file_manager,
+    help_command, task_dependency_graph,
 ]
 
 # Tools that mutate the system and should ask for confirmation when enabled.
@@ -96,6 +123,7 @@ DANGEROUS_TOOLS = {
     "move_file",
     "rename_file",
     "manage_files",
+    "save_skill",
 }
 
 
@@ -130,7 +158,11 @@ def _discover_external_plugins(registry: "ToolRegistry") -> None:
         if path.name.startswith("_"):
             continue
         try:
-            module = importlib.machinery.SourceFileLoader(path.stem, str(path)).load_module()
+            spec = importlib.util.spec_from_file_location(path.stem, str(path))
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
             _register_module(registry, module)
         except Exception as exc:
             print(f"[plugins] failed to load {path.name}: {exc}")
@@ -149,6 +181,8 @@ class ToolRegistry:
                     self._tools[t.name] = t
             except Exception as exc:
                 print(f"[plugins] MCP discovery failed: {exc}")
+        self._call_times: list[float] = []
+        self._max_calls_per_minute = 60
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
@@ -159,10 +193,36 @@ class ToolRegistry:
     def names(self) -> List[str]:
         return list(self._tools.keys())
 
+    def _check_rate_limit(self) -> bool:
+        now = time.time()
+        self._call_times = [t for t in self._call_times if now - t < 60]
+        if len(self._call_times) >= self._max_calls_per_minute:
+            return False
+        self._call_times.append(now)
+        return True
+
     def execute(self, name: str, arguments: dict) -> ToolResult:
         t = self._tools.get(name)
         if not t:
             return ToolResult(ok=False, output=f"Unknown tool: {name}")
+
+        if not self._check_rate_limit():
+            return ToolResult(
+                ok=False,
+                output=f"Rate limit exceeded: too many tool calls. Please wait before trying again.",
+            )
+
+        # Per-tool permission granularity.
+        if settings.assistant.allowed_tools and name not in settings.assistant.allowed_tools:
+            return ToolResult(
+                ok=False,
+                output=f"Tool '{name}' is not in the allowed tools list.",
+            )
+        if name in settings.assistant.denied_tools:
+            return ToolResult(
+                ok=False,
+                output=f"Tool '{name}' is explicitly denied.",
+            )
 
         mode = settings.assistant.mode
         # Permission tiers: in "standard" mode, block mutating tools entirely.
@@ -192,10 +252,39 @@ class ToolRegistry:
                 f"{datetime.now().isoformat(timespec='seconds')} | "
                 f"tool={name} ok={result.ok} args={arguments} -> {result.output[:200]}\n"
             )
+            entry = line.encode("utf-8")
+            digest = hmac.new(
+                _AUDIT_HMAC_KEY.encode("utf-8"),
+                entry,
+                hashlib.sha256,
+            ).hexdigest()
+            signed = f"{digest} | {line}"
             with open(settings.assistant.audit_log, "a", encoding="utf-8") as f:
-                f.write(line)
+                f.write(signed)
         except Exception:
             pass
+
+    @staticmethod
+    def verify_audit_integrity(log_path: str) -> bool:
+        try:
+            path = Path(log_path)
+            if not path.exists():
+                return True
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if " | " not in line:
+                    continue
+                digest_str, _, rest = line.partition(" | ")
+                entry = (rest + "\n").encode("utf-8")
+                expected = hmac.new(
+                    _AUDIT_HMAC_KEY.encode("utf-8"),
+                    entry,
+                    hashlib.sha256,
+                ).hexdigest()
+                if not hmac.compare_digest(digest_str, expected):
+                    return False
+            return True
+        except Exception:
+            return False
 
     def __contains__(self, name: str) -> bool:
         return name in self._tools

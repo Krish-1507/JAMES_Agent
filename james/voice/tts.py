@@ -29,6 +29,17 @@ class Pyttsx3TTS(TTSProvider):
         self.engine.runAndWait()
 
 
+def _play_audio(path: str) -> None:
+    try:
+        import subprocess
+
+        subprocess.run(["ffplay", "-nodisp", "-autoexit", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        import os
+
+        os.system(f'start "" "{path}"' if os.name == "nt" else f'xdg-open "{path}"')
+
+
 class EdgeTTS(TTSProvider):
     def __init__(self, voice="en-US-AriaNeural"):
         import edge_tts
@@ -45,18 +56,22 @@ class EdgeTTS(TTSProvider):
             await comm.save(path)
             self._play(path)
 
-        asyncio.run(_say())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, _say())
+                future.result()
+        else:
+            asyncio.run(_say())
 
     @staticmethod
     def _play(path):
-        import subprocess
-
-        try:
-            subprocess.run(["ffplay", "-nodisp", "-autoexit", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            import os
-
-            os.system(f'start "" "{path}"' if os.name == "nt" else f'xdg-open "{path}"')
+        _play_audio(path)
 
 
 class OpenAITTS(TTSProvider):
@@ -70,7 +85,7 @@ class OpenAITTS(TTSProvider):
         resp = self.client.audio.speech.create(model="tts-1", voice=self.voice, input=text)
         path = tempfile.mktemp(suffix=".mp3")
         resp.stream_to_file(path)
-        EdgeTTS._play(path)
+        _play_audio(path)
 
 
 class ElevenLabsTTS(TTSProvider):

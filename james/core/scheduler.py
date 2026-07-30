@@ -1,7 +1,9 @@
 """Scheduler — reminders and delayed/recurring tasks that fire in the background."""
 from __future__ import annotations
 
+import re
 import json
+import shlex
 import subprocess
 import threading
 import time
@@ -11,6 +13,8 @@ from pathlib import Path
 from typing import List, Optional
 
 from ..config import settings
+
+_SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
 
 
 def _notify(title: str, message: str) -> None:
@@ -70,14 +74,24 @@ class Scheduler:
         self._save(new)
         return len(new) != len(jobs)
 
-    def _fire(self, job: Job) -> None:
-        if job.message:
-            _notify(f"{settings.assistant.name} reminder", job.message)
-        if job.command:
-            try:
-                subprocess.run(job.command, shell=True, capture_output=True, text=True, timeout=120)
-            except Exception as exc:
-                _notify("Scheduled task failed", str(exc))
+def _validate_command(command: str) -> bool:
+    if _SHELL_METACHAR_RE.search(command):
+        return False
+    return True
+
+
+def _fire(self, job: Job) -> None:
+    if job.message:
+        _notify(f"{settings.assistant.name} reminder", job.message)
+    if job.command:
+        if not _validate_command(job.command):
+            _notify("Scheduled task blocked", f"Command contains unsafe characters: {job.command[:80]}")
+            return
+        try:
+            args = shlex.split(job.command)
+            subprocess.run(args, shell=False, capture_output=True, text=True, timeout=120)
+        except Exception as exc:
+            _notify("Scheduled task failed", str(exc))
 
     def _run_loop(self) -> None:
         while not self._stop.is_set():

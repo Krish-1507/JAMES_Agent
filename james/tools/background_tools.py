@@ -84,6 +84,23 @@ class BackgroundManager:
                 record["status"] = "error"
             with self._lock:
                 self._save(record)
+            try:
+                from plyer import notification
+
+                if record["status"] == "done":
+                    notification.notify(
+                        title="Background task complete",
+                        message=record["task"][:100],
+                        timeout=5,
+                    )
+                else:
+                    notification.notify(
+                        title="Background task failed",
+                        message=record["result"][:100],
+                        timeout=5,
+                    )
+            except Exception:
+                pass
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
@@ -157,3 +174,35 @@ def get_background_result(id: str) -> ToolResult:
     if t["status"] in ("running",):
         return ToolResult(ok=True, output=f"[{t['status']}] still working on: {t['task']}")
     return ToolResult(ok=True, output=f"[{t['status']}] {t['result']}")
+
+
+@tool(
+    "task_dependency_graph",
+    "Generate a visual dependency graph of tool calls from the current session. "
+    "Returns a DOT-format graph string that can be rendered by Graphviz or online tools.",
+    {"task_id": {"type": "string", "description": "Optional background task id to visualize."}},
+)
+def task_dependency_graph(task_id: str = "") -> ToolResult:
+    try:
+        history_path = settings.assistant.workspace_dir / "conversation_history.jsonl"
+        if not history_path.exists():
+            return ToolResult(ok=False, output="No conversation history found.")
+        lines = []
+        for line in history_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                msg = json.loads(line)
+                if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                    for tc in msg["tool_calls"]:
+                        fn = tc.get("function", {})
+                        lines.append(f'  "{fn.get("name", "?")}" [label="{fn.get("name", "?")}"];')
+            except json.JSONDecodeError:
+                continue
+        if not lines:
+            return ToolResult(ok=True, output="No tool calls found in history.")
+        dot = "digraph ToolCalls {\n  rankdir=LR;\n  node [shape=box];\n" + "\n".join(lines) + "\n}"
+        return ToolResult(ok=True, output=dot)
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Graph generation failed: {exc}")

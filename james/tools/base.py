@@ -58,7 +58,49 @@ class FunctionTool(Tool):
         self.parameters = parameters
         self.required = required
 
+    def _validate_args(self, **kwargs) -> list[str]:
+        errors = []
+        for param_name, param_schema in self.parameters.items():
+            value = kwargs.get(param_name)
+            if param_name in self.required and value is None:
+                errors.append(f"Missing required parameter: {param_name}")
+                continue
+            if value is None:
+                continue
+            param_type = param_schema.get("type", "string")
+            if param_type == "integer":
+                if not isinstance(value, int):
+                    errors.append(f"Parameter '{param_name}' must be an integer, got {type(value).__name__}")
+            elif param_type == "number":
+                if not isinstance(value, (int, float)):
+                    errors.append(f"Parameter '{param_name}' must be a number, got {type(value).__name__}")
+            elif param_type == "boolean":
+                if not isinstance(value, bool):
+                    errors.append(f"Parameter '{param_name}' must be a boolean, got {type(value).__name__}")
+            elif param_type == "string":
+                if not isinstance(value, str):
+                    errors.append(f"Parameter '{param_name}' must be a string, got {type(value).__name__}")
+            elif param_type == "array":
+                if not isinstance(value, list):
+                    errors.append(f"Parameter '{param_name}' must be an array, got {type(value).__name__}")
+            elif param_type == "object":
+                if not isinstance(value, dict):
+                    errors.append(f"Parameter '{param_name}' must be an object, got {type(value).__name__}")
+            max_length = param_schema.get("maxLength")
+            if max_length is not None and isinstance(value, str) and len(value) > max_length:
+                errors.append(f"Parameter '{param_name}' exceeds maximum length of {max_length}")
+            minimum = param_schema.get("minimum")
+            if minimum is not None and isinstance(value, (int, float)) and value < minimum:
+                errors.append(f"Parameter '{param_name}' is below minimum of {minimum}")
+            maximum = param_schema.get("maximum")
+            if maximum is not None and isinstance(value, (int, float)) and value > maximum:
+                errors.append(f"Parameter '{param_name}' exceeds maximum of {maximum}")
+        return errors
+
     def run(self, **kwargs) -> ToolResult:
+        validation_errors = self._validate_args(**kwargs)
+        if validation_errors:
+            return ToolResult(ok=False, output="Invalid arguments: " + "; ".join(validation_errors))
         try:
             result = self._func(**kwargs)
         except Exception as exc:  # surface errors back to the model
@@ -66,6 +108,24 @@ class FunctionTool(Tool):
         if isinstance(result, ToolResult):
             return result
         return ToolResult(ok=True, output=str(result))
+
+    def stream(self, **kwargs):
+        """Stream tool output in chunks for long-running operations.
+
+        Override this in subclasses that produce incremental output.
+        By default, yields a single chunk with the full result.
+        """
+        result = self.run(**kwargs)
+        yield result
+
+    def stream(self, **kwargs):
+        """Stream tool output in chunks for long-running operations.
+
+        Override this in subclasses that produce incremental output.
+        By default, yields a single chunk with the full result.
+        """
+        result = self.run(**kwargs)
+        yield result
 
 
 def tool(name: str, description: str, parameters: Dict[str, Any], required: List[str] | None = None):

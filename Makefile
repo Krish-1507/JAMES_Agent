@@ -33,4 +33,14 @@ new-tool:
 	@echo "Usage: python -m james --new-tool <name>"
 
 clean:
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@if [ -d .git ]; then git clean -fdx --exclude=.env --exclude=legacy; fi
+	@if [ -d james/__pycache__ ]; then rm -rf james/__pycache__; fi
+	@if [ -d james/*/__pycache__ ]; then rm -rf james/*/__pycache__; fi
+	@if [ -d james/core/__pycache__ ]; then rm -rf james/core/__pycache__; fi
+	@if [ -d james/tools/__pycache__ ]; then rm -rf james/tools/__pycache__; fi
+	@if [ -d james/ui/__pycache__ ]; then rm -rf james/ui/__pycache__; fi
+	@if [ -d james/voice/__pycache__ ]; then rm -rf james/voice/__pycache__; fi
+	@if [ -d james/llm/__pycache__ ]; then rm -rf james/llm/__pycache__; fi
+	@if [ -d james/evaluation/__pycache__ ]; then rm -rf james/evaluation/__pycache__; fi
+	@if [ -d tests/__pycache__ ]; then rm -rf tests/__pycache__; fi
+	@echo "Clean complete."

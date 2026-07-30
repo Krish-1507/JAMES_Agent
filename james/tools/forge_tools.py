@@ -17,7 +17,23 @@ from pathlib import Path
 
 from .base import Tool, ToolResult, tool
 
-_registry = {"reg": None}
+_DANGEROUS_IMPORTS = {
+    "os", "subprocess", "sys", "shutil", "socket", "threading",
+    "multiprocessing", "importlib", "exec", "eval", "compile",
+    "open", "pathlib", "tempfile", "glob", "fnmatch",
+}
+
+
+def _scan_for_dangerous_imports(code: str) -> list[str]:
+    dangerous = []
+    for line in code.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("import ") or stripped.startswith("from "):
+            for imp in _DANGEROUS_IMPORTS:
+                if imp in stripped.split()[1].split(".")[0].split(",")[0]:
+                    dangerous.append(stripped)
+                    break
+    return dangerous
 _skill_tools: dict = {}  # file stem -> list of registered tool names
 _PLUGINS_DIR = Path(__file__).resolve().parents[2] / "plugins"
 
@@ -35,6 +51,50 @@ def _find_tools(module) -> list:
     from .base import Tool
 
     return [v for v in vars(module).values() if isinstance(v, Tool)]
+
+
+_RESTRICTED_BUILTINS = {
+    "True": True,
+    "False": False,
+    "None": None,
+    "str": str,
+    "int": int,
+    "float": float,
+    "bool": bool,
+    "list": list,
+    "dict": dict,
+    "tuple": tuple,
+    "set": set,
+    "len": len,
+    "range": range,
+    "enumerate": enumerate,
+    "zip": zip,
+    "map": map,
+    "filter": filter,
+    "sum": sum,
+    "min": min,
+    "max": max,
+    "abs": abs,
+    "round": round,
+    "isinstance": isinstance,
+    "hasattr": hasattr,
+    "getattr": getattr,
+    "setattr": setattr,
+    "delattr": delattr,
+    "print": print,
+    "super": super,
+    "property": property,
+    "classmethod": classmethod,
+    "staticmethod": staticmethod,
+    "Exception": Exception,
+    "ValueError": ValueError,
+    "TypeError": TypeError,
+    "KeyError": KeyError,
+    "IndexError": IndexError,
+    "AttributeError": AttributeError,
+    "ImportError": ImportError,
+    "RuntimeError": RuntimeError,
+}
 
 
 def _persist_skill(name: str, code: str, description: str = "") -> ToolResult:
@@ -55,11 +115,19 @@ def _persist_skill(name: str, code: str, description: str = "") -> ToolResult:
     except py_compile.PyCompileError as exc:
         return ToolResult(ok=False, output=f"Skill code did not compile:\n{exc}")
 
+    dangerous = _scan_for_dangerous_imports(code)
+    if dangerous:
+        return ToolResult(
+            ok=False,
+            output="Skill code contains disallowed imports: " + ", ".join(dangerous),
+        )
+
     path.write_text(code, encoding="utf-8")
 
     try:
         spec = importlib.util.spec_from_file_location(f"james_skill_{fname}", str(path))
         module = importlib.util.module_from_spec(spec)
+        module.__builtins__ = _RESTRICTED_BUILTINS
         spec.loader.exec_module(module)
         tools = _find_tools(module)
         if not tools:

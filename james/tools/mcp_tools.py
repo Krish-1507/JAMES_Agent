@@ -12,11 +12,33 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
 from .base import Tool, ToolResult
+
+
+def _run_async(coro):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None and loop.is_running():
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, coro)
+            return future.result()
+    try:
+        return asyncio.run(coro)
+    except RuntimeError:
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, coro)
+            return future.result()
 
 
 @dataclass
@@ -75,12 +97,37 @@ def _extract_text(result) -> str:
     return "\n".join(parts)
 
 
+_MAX_MCP_ARGS_SIZE = 65536
+
+_SENSITIVE_KEY_PATTERNS = re.compile(r'api[_-]?key|secret|token|password|passwd|auth|credential', re.IGNORECASE)
+
+
+def _validate_mcp_arguments(arguments: dict, tool_name: str) -> dict:
+    if not isinstance(arguments, dict):
+        raise ValueError(f"Arguments for '{tool_name}' must be a dict, got {type(arguments).__name__}")
+    if len(str(arguments)) > _MAX_MCP_ARGS_SIZE:
+        raise ValueError(f"Arguments for '{tool_name}' exceed maximum size of {_MAX_MCP_ARGS_SIZE} bytes")
+    sanitized = {}
+    for key, value in arguments.items():
+        if not isinstance(key, str):
+            raise ValueError(f"Argument key must be a string, got {type(key).__name__}")
+        if _SENSITIVE_KEY_PATTERNS.search(key) and isinstance(value, str):
+            sanitized[key] = "***REDACTED***"
+        elif isinstance(value, str) and len(value) > 10000:
+            sanitized[key] = value[:10000]
+        else:
+            sanitized[key] = value
+    return sanitized
+
+
 def call_mcp(spec: MCPServerSpec, tool_name: str, arguments: dict) -> str:
+    validated = _validate_mcp_arguments(arguments or {}, tool_name)
+
     async def _call(session):
-        res = await session.call_tool(tool_name, arguments or {})
+        res = await session.call_tool(tool_name, validated)
         return _extract_text(res)
 
-    return asyncio.run(_with_session(spec, _call))
+    return _run_async(_with_session(spec, _call))
 
 
 def _spec_from_dict(d: dict) -> MCPServerSpec:
@@ -143,7 +190,7 @@ def discover_mcp_tools() -> List[Tool]:
             async def _list(session):
                 return (await session.list_tools()).tools
 
-            mcp_tools = asyncio.run(asyncio.wait_for(_with_session(spec, _list), timeout=20))
+            mcp_tools = _run_async(asyncio.wait_for(_with_session(spec, _list), timeout=20))
             for mt in mcp_tools:
                 tools.append(MCPTool(spec, mt))
             print(f"[mcp] loaded {len(mcp_tools)} tool(s) from '{spec.name}'")

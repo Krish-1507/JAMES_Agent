@@ -5,6 +5,7 @@ results back as text. Great for booking, shopping, filling web forms, etc.
 """
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 from ..config import settings
@@ -12,17 +13,65 @@ from .base import Tool, ToolResult, tool
 
 _browser = None
 _page = None
+_browser_errors = 0
+_MAX_BROWSER_ERRORS = 3
+_RECOVERY_COOLDOWN = 5.0
 
 
 def _get_page():
-    global _browser, _page
+    global _browser, _page, _browser_errors
     if _page is not None:
-        return _page
+        try:
+            _page.title()
+            return _page
+        except Exception:
+            _close()
+    if _browser_errors >= _MAX_BROWSER_ERRORS:
+        raise RuntimeError(
+            f"Browser has failed {_browser_errors} times. "
+            f"Please close and restart the browser with browser_close()."
+        )
     from playwright.sync_api import sync_playwright
 
-    _browser = sync_playwright().start().chromium.launch(headless=settings.assistant.browser_headless)
-    _page = _browser.new_page()
-    return _page
+    try:
+        _browser = sync_playwright().start().chromium.launch(
+            headless=settings.assistant.browser_headless
+        )
+        _page = _browser.new_page()
+        return _page
+    except Exception as exc:
+        _browser_errors += 1
+        _browser = None
+        _page = None
+        raise RuntimeError(f"Browser launch failed ({_browser_errors}/{_MAX_BROWSER_ERRORS}): {exc}")
+
+
+def _close():
+    global _browser, _page, _browser_errors
+    if _browser is not None:
+        try:
+            _browser.close()
+        except Exception:
+            pass
+        _browser = None
+        _page = None
+        _browser_errors = 0
+
+
+def _health_check() -> bool:
+    """Check if the browser is healthy; attempt recovery if not."""
+    global _browser_errors
+    if _page is None and _browser is None:
+        _browser_errors = 0
+        return False
+    try:
+        if _page is not None:
+            _page.title()
+        return True
+    except Exception:
+        _close()
+        _browser_errors = 0
+        return False
 
 
 def _close():
@@ -120,6 +169,21 @@ def browser_screenshot(filename: str = "page.png") -> ToolResult:
         return ToolResult(ok=True, output=f"Screenshot saved to {p}")
     except Exception as exc:
         return ToolResult(ok=False, output=f"Screenshot failed: {exc}")
+
+
+@tool(
+    "browser_health",
+    "Check if the browser session is healthy and attempt recovery if needed. Returns the browser status.",
+    {},
+)
+def browser_health() -> ToolResult:
+    try:
+        healthy = _health_check()
+        if healthy:
+            return ToolResult(ok=True, output="Browser is healthy.")
+        return ToolResult(ok=False, output="Browser is not running. Use browser_navigate to start a session.")
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Browser health check failed: {exc}")
 
 
 @tool(

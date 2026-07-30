@@ -6,6 +6,7 @@ The assistant runs in a worker thread; its activity streams into the UI:
   • task canvas — a live list of every tool the agent calls
   • reply label — the spoken answer, revealed word-by-word (streaming)
   • log         — full console output
+  • history     — conversation history view
 A system tray icon lets you hide/show and quit.
 """
 from __future__ import annotations
@@ -14,6 +15,7 @@ from PyQt5.QtCore import QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QIcon, QPainter
 from PyQt5.QtWidgets import (
     QApplication,
+    QComboBox,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -23,6 +25,7 @@ from PyQt5.QtWidgets import (
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
+    QHBoxLayout,
     QMenu,
 )
 
@@ -48,6 +51,7 @@ class _Worker(QThread):
     status = pyqtSignal(str)
     canvas = pyqtSignal(str)
     stream = pyqtSignal(str)
+    tool_output = pyqtSignal(str, str)  # call_id, chunk
     canvas_start = pyqtSignal(str, str)   # call_id, name
     canvas_done = pyqtSignal(str, str, str, bool)  # call_id, name, snippet, ok
 
@@ -108,7 +112,7 @@ class OrbWindow(QMainWindow):
 
         super().__init__()
         self.setWindowTitle(f"{settings.assistant.name} — JARVIS")
-        self.resize(460, 600)
+        self.resize(520, 700)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -118,10 +122,25 @@ class OrbWindow(QMainWindow):
         self.orb.setStyleSheet("font-size:40px; color:#39c; qproperty-alignment:AlignCenter;")
         layout.addWidget(self.orb)
 
+        # Model switcher
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(QLabel("Model:"))
+        self.model_combo = QComboBox()
+        self.model_combo.addItems(["openai:gpt-4o-mini", "anthropic:claude-3-sonnet", "groq:llama-3.3-70b", "custom:local"])
+        self.model_combo.currentTextChanged.connect(self._on_model_change)
+        model_layout.addWidget(self.model_combo)
+        layout.addLayout(model_layout)
+
         self.reply = QLabel("")
         self.reply.setWordWrap(True)
         self.reply.setStyleSheet("font-size:14px; color:#cde; padding:6px;")
         layout.addWidget(self.reply)
+
+        # History view
+        layout.addWidget(QLabel("Conversation"))
+        self.history_view = QListWidget()
+        self.history_view.setStyleSheet("QListWidget::item { padding: 2px; }")
+        layout.addWidget(self.history_view)
 
         layout.addWidget(QLabel("Live task canvas"))
         self.canvas = QListWidget()
@@ -132,9 +151,85 @@ class OrbWindow(QMainWindow):
         self.log.setReadOnly(True)
         layout.addWidget(self.log)
 
+        # MCP server management
+        layout.addWidget(QLabel("MCP Servers"))
+        self.mcp_list = QListWidget()
+        self.mcp_list.setStyleSheet("QListWidget::item { padding: 2px; }")
+        layout.addWidget(self.mcp_list)
+
+        mcp_btn_layout = QHBoxLayout()
+        self.mcp_refresh_btn = QPushButton("Refresh")
+        self.mcp_refresh_btn.clicked.connect(self._refresh_mcp)
+        mcp_btn_layout.addWidget(self.mcp_refresh_btn)
+        self.mcp_toggle_btn = QPushButton("Toggle Server")
+        self.mcp_toggle_btn.clicked.connect(self._toggle_mcp_server)
+        mcp_btn_layout.addWidget(self.mcp_toggle_btn)
+        layout.addLayout(mcp_btn_layout)
+
+        # Control buttons
+        btn_layout = QHBoxLayout()
         self.start_btn = QPushButton("Start JAMES")
         self.start_btn.clicked.connect(self.start)
-        layout.addWidget(self.start_btn)
+        btn_layout.addWidget(self.start_btn)
+
+        self.pause_btn = QPushButton("Pause")
+        self.pause_btn.clicked.connect(self._on_pause)
+        self.pause_btn.setEnabled(False)
+        btn_layout.addWidget(self.pause_btn)
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self._on_cancel)
+        self.cancel_btn.setEnabled(False)
+        btn_layout.addWidget(self.cancel_btn)
+
+        layout.addLayout(btn_layout)
+
+        self.worker = _Worker()
+        self.worker.log.connect(self.log.appendPlainText)
+        self.worker.status.connect(self._on_status)
+        self.worker.canvas.connect(self._on_canvas)
+        self.worker.canvas_start.connect(self._on_canvas_start)
+        self.worker.canvas_done.connect(self._on_canvas_done)
+        self.worker.stream.connect(self._on_stream)
+        self.worker.tool_output.connect(self._on_tool_output)
+        self._stream_text = ""
+        self._stream_i = 0
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._tick)
+        self._canvas_items = {}
+        self._paused = False
+        self._cancelled = False
+        self._tool_output_buffer = {}
+
+        self._setup_tray()
+        self.start()
+
+    def _refresh_mcp(self) -> None:
+        try:
+            from ..tools.mcp_tools import load_mcp_configs
+
+            configs = load_mcp_configs()
+            self.mcp_list.clear()
+            for cfg in configs:
+                self.mcp_list.addItem(f"{cfg.name} ({cfg.transport}) — {cfg.command or cfg.url or 'N/A'}")
+        except Exception as exc:
+            self.mcp_list.addItem(f"Error: {exc}")
+
+    def _toggle_mcp_server(self) -> None:
+        selected = self.mcp_list.currentItem()
+        if not selected:
+            return
+        name = selected.text().split(" ")[0]
+        try:
+            from ..tools.mcp_tools import load_mcp_configs
+
+            configs = load_mcp_configs()
+            for cfg in configs:
+                if cfg.name == name:
+                    self.log.appendPlainText(f"Toggled MCP server '{name}'")
+                    break
+        except Exception as exc:
+            self.log.appendPlainText(f"MCP toggle error: {exc}")
 
         self.worker = _Worker()
         self.worker.log.connect(self.log.appendPlainText)
@@ -148,9 +243,35 @@ class OrbWindow(QMainWindow):
         self._timer = QTimer()
         self._timer.timeout.connect(self._tick)
         self._canvas_items = {}
+        self._paused = False
+        self._cancelled = False
 
         self._setup_tray()
         self.start()
+
+    def _on_model_change(self, text: str) -> None:
+        provider, _, model = text.partition(":")
+        import os
+
+        os.environ["LLM_PROVIDER"] = provider
+        os.environ["LLM_MODEL"] = model
+
+    def _on_pause(self) -> None:
+        self._paused = not self._paused
+        self.pause_btn.setText("Resume" if self._paused else "Pause")
+
+    def _on_cancel(self) -> None:
+        self._cancelled = True
+        self.cancel_btn.setEnabled(False)
+
+    def start(self):
+        if self.worker.isRunning():
+            return
+        self.start_btn.setEnabled(False)
+        self.pause_btn.setEnabled(True)
+        self.cancel_btn.setEnabled(True)
+        self._cancelled = False
+        self.worker.start()
 
     # ---- streaming reveal ----
     def _on_stream(self, text: str):
@@ -158,14 +279,22 @@ class OrbWindow(QMainWindow):
         self._stream_i = 0
         self.reply.setText("")
         if text:
-            self._timer.start(18)
+            self._timer.start(50)
 
     def _tick(self):
         if self._stream_i >= len(self._stream_text):
             self._timer.stop()
             return
-        self._stream_i += 2
+        self._stream_i += 1
         self.reply.setText(self._stream_text[: self._stream_i])
+
+    def _on_tool_output(self, call_id: str, chunk: str):
+        if call_id not in self._tool_output_buffer:
+            self._tool_output_buffer[call_id] = ""
+        self._tool_output_buffer[call_id] += chunk
+        item = self._canvas_items.get(call_id)
+        if item is not None:
+            item.setText(f"▶ {call_id[:8]}... {self._tool_output_buffer[call_id][-60:]}")
 
     def _on_status(self, text: str):
         self.orb.setText(f"◉ {text}")
@@ -196,12 +325,6 @@ class OrbWindow(QMainWindow):
         item.setText(f"{mark} [{ts}] {name}: {snippet}")
         item.setForeground(QColor("#3ad17a" if ok else "#ff6b6b"))
         self.canvas.scrollToBottom()
-
-    def start(self):
-        if self.worker.isRunning():
-            return
-        self.start_btn.setEnabled(False)
-        self.worker.start()
 
     def _setup_tray(self):
         try:
