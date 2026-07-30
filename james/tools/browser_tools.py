@@ -53,9 +53,9 @@ def _close():
             _browser.close()
         except Exception:
             pass
-        _browser = None
-        _page = None
-        _browser_errors = 0
+    _browser = None
+    _page = None
+    _browser_errors = 0
 
 
 def _health_check() -> bool:
@@ -74,15 +74,6 @@ def _health_check() -> bool:
         return False
 
 
-def _close():
-    global _browser, _page
-    if _browser is not None:
-        try:
-            _browser.close()
-        except Exception:
-            pass
-        _browser = None
-        _page = None
 
 
 @tool(

@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "james-assistant"
 version = "0.1.0"
-description = "JAMES — an open-source, voice-first JARVIS that automates your computer with LLM agents and tools."
+description = "JAMES is an alpha-stage, desktop-first LLM assistant with explicit safety boundaries."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "JAMES Contributors" }]
-keywords = ["jarvis", "assistant", "voice", "agent", "llm", "automation", "ai"]
+keywords = ["assistant", "voice", "agent", "llm", "automation", "ai"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.10",
@@ -24,6 +24,7 @@ classifiers = [
 # Core dependencies are enough to run JAMES in text mode with any LLM provider.
 # Everything else is an optional extra so the base install stays light.
 dependencies = [
+    "cryptography>=42.0.0",
     "python-dotenv>=1.0.0",
     "rich>=13.7.0",
     "requests>=2.31.0",
@@ -36,7 +37,7 @@ dependencies = [
 [project.optional-dependencies]
 # Orb GUI (live task canvas)
 ui = ["PyQt5>=5.15.0"]
-# Model Context Protocol — inherit thousands of community servers
+# Model Context Protocol - inherit thousands of community servers
 mcp = ["mcp>=1.2.0"]
 # Document generation
 docs = [

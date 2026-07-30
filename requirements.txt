@@ -3,6 +3,7 @@ python-dotenv>=1.0.0
 requests>=2.31.0
 rich>=13.7.0
 pydantic>=2.6.0
+cryptography>=42.0.0
 
 # LLM providers (all optional — install what you use)
 openai>=1.30.0

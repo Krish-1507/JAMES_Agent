@@ -9,14 +9,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import importlib
-import os
 import pkgutil
-import sys
 import time
 from pathlib import Path
 from types import ModuleType
 from typing import Dict, List
 
+from ..core.secrets import load_or_create_secret
 from .base import Tool, ToolResult, tool
 from .browser_tools import (
     browser_click,
@@ -43,7 +42,7 @@ from .background_tools import (
 from .delegate_tool import delegate
 from .document_tools import create_pdf, create_powerpoint, create_word_document
 from .file_manager_tools import list_file_manager_tasks, manage_files, stop_file_manager
-from .forge_tools import forget_skill, list_skills, save_skill
+from .forge_tools import _GENERATED_SKILL_HEADER, forget_skill, list_skills, load_generated_skill, save_skill
 from .mcp_tools import discover_mcp_tools
 from .marketplace import install_plugin, list_plugins, remove_plugin, search_plugins
 from .file_tools import (
@@ -85,11 +84,9 @@ def help_command() -> ToolResult:
         lines.append(f"- {t.name}: {t.description[:100]}")
     return ToolResult(ok=True, output="Available tools:\n" + "\n".join(lines))
 
-_AUDIT_KEY = "james-audit-integrity"
-_AUDIT_HMAC_KEY = os.environ.get(
-    "JAMES_AUDIT_HMAC_KEY",
-    "james-audit-secret-change-me-in-production",
-)
+def _audit_hmac_key() -> bytes:
+    path = settings.assistant.workspace_dir / ".james_audit_hmac.key"
+    return load_or_create_secret("JAMES_AUDIT_HMAC_KEY", path)
 
 # Built-in registry.
 ALL_TOOLS: List[Tool] = [
@@ -127,6 +124,12 @@ DANGEROUS_TOOLS = {
 }
 
 
+def is_dangerous_tool_call(name: str, arguments: dict | None = None) -> bool:
+    if name == "schedule_task":
+        return bool((arguments or {}).get("command"))
+    return name in DANGEROUS_TOOLS
+
+
 def _register_module(registry: "ToolRegistry", module: ModuleType) -> None:
     for value in vars(module).values():
         if isinstance(value, Tool):
@@ -152,17 +155,21 @@ def _discover_external_plugins(registry: "ToolRegistry") -> None:
     ext = Path(__file__).resolve().parents[2] / "plugins"
     if not ext.is_dir():
         return
-    if str(ext) not in sys.path:
-        sys.path.insert(0, str(ext))
     for path in ext.glob("*.py"):
         if path.name.startswith("_"):
             continue
         try:
-            spec = importlib.util.spec_from_file_location(path.stem, str(path))
-            if spec is None or spec.loader is None:
+            source = path.read_text(encoding="utf-8")
+            if source.startswith(_GENERATED_SKILL_HEADER):
+                module = load_generated_skill(path)
+            elif settings.assistant.external_plugins_enabled:
+                spec = importlib.util.spec_from_file_location(path.stem, str(path))
+                if spec is None or spec.loader is None:
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+            else:
                 continue
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
             _register_module(registry, module)
         except Exception as exc:
             print(f"[plugins] failed to load {path.name}: {exc}")
@@ -226,7 +233,7 @@ class ToolRegistry:
 
         mode = settings.assistant.mode
         # Permission tiers: in "standard" mode, block mutating tools entirely.
-        if mode == "standard" and name in DANGEROUS_TOOLS:
+        if mode == "standard" and is_dangerous_tool_call(name, arguments):
             result = ToolResult(
                 ok=False,
                 output=f"Tool '{name}' is disabled in 'standard' mode. Set JAMES_MODE=full to enable.",
@@ -235,7 +242,7 @@ class ToolRegistry:
             return result
 
         # Dry-run: simulate dangerous actions instead of executing them.
-        if settings.assistant.dry_run and name in DANGEROUS_TOOLS:
+        if settings.assistant.dry_run and is_dangerous_tool_call(name, arguments):
             result = ToolResult(ok=True, output=f"[DRY RUN] Would have executed '{name}' with {arguments}")
             self._audit(name, arguments, result)
             return result
@@ -254,7 +261,7 @@ class ToolRegistry:
             )
             entry = line.encode("utf-8")
             digest = hmac.new(
-                _AUDIT_HMAC_KEY.encode("utf-8"),
+                _audit_hmac_key(),
                 entry,
                 hashlib.sha256,
             ).hexdigest()
@@ -276,7 +283,7 @@ class ToolRegistry:
                 digest_str, _, rest = line.partition(" | ")
                 entry = (rest + "\n").encode("utf-8")
                 expected = hmac.new(
-                    _AUDIT_HMAC_KEY.encode("utf-8"),
+                    _audit_hmac_key(),
                     entry,
                     hashlib.sha256,
                 ).hexdigest()

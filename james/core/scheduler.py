@@ -1,20 +1,18 @@
 """Scheduler — reminders and delayed/recurring tasks that fire in the background."""
 from __future__ import annotations
 
-import re
 import json
-import shlex
+import os
 import subprocess
 import threading
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
 from ..config import settings
-
-_SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
+from .command_policy import is_safe_command, parse_safe_command
 
 
 def _notify(title: str, message: str) -> None:
@@ -36,6 +34,10 @@ class Job:
     done: bool = False
 
 
+def _validate_command(command: str) -> bool:
+    return is_safe_command(command)
+
+
 class Scheduler:
     def __init__(self, path: Optional[Path] = None):
         self.path = path or (settings.assistant.workspace_dir / "schedule.json")
@@ -54,44 +56,60 @@ class Scheduler:
 
     def _save(self, jobs: List[Job]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps([asdict(j) for j in jobs], indent=2), encoding="utf-8")
+        temp_path = self.path.with_suffix(self.path.suffix + ".tmp")
+        temp_path.write_text(
+            json.dumps([asdict(j) for j in jobs], indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temp_path, self.path)
 
     # ---- API ----
     def add(self, at: datetime, *, command: str = None, message: str = None, repeat: str = None) -> str:
-        jobs = self._load()
-        job = Job(id=f"job{int(time.time()*1000)}", at=at.isoformat(timespec="seconds"),
-                  command=command, message=message, repeat=repeat)
-        jobs.append(job)
-        self._save(jobs)
+        if command and not _validate_command(command):
+            raise ValueError("Scheduled command is not in the read-only command allowlist.")
+        if repeat not in (None, "daily", "hourly"):
+            raise ValueError("Repeat must be 'daily', 'hourly', or empty.")
+        with self._lock:
+            jobs = self._load()
+            job = Job(
+                id=f"job{time.time_ns()}", at=at.isoformat(timespec="seconds"),
+                command=command, message=message, repeat=repeat,
+            )
+            jobs.append(job)
+            self._save(jobs)
         return job.id
 
     def list_jobs(self) -> List[Job]:
         return [j for j in self._load() if not j.done]
 
     def cancel(self, job_id: str) -> bool:
-        jobs = self._load()
-        new = [j for j in jobs if j.id != job_id]
-        self._save(new)
+        with self._lock:
+            jobs = self._load()
+            new = [j for j in jobs if j.id != job_id]
+            self._save(new)
         return len(new) != len(jobs)
 
-def _validate_command(command: str) -> bool:
-    if _SHELL_METACHAR_RE.search(command):
-        return False
-    return True
 
 
-def _fire(self, job: Job) -> None:
-    if job.message:
-        _notify(f"{settings.assistant.name} reminder", job.message)
-    if job.command:
-        if not _validate_command(job.command):
-            _notify("Scheduled task blocked", f"Command contains unsafe characters: {job.command[:80]}")
-            return
-        try:
-            args = shlex.split(job.command)
-            subprocess.run(args, shell=False, capture_output=True, text=True, timeout=120)
-        except Exception as exc:
-            _notify("Scheduled task failed", str(exc))
+    def _fire(self, job: Job) -> None:
+        if job.message:
+            _notify(f"{settings.assistant.name} reminder", job.message)
+        if job.command:
+            args, reason = parse_safe_command(job.command)
+            if args is None:
+                _notify("Scheduled task blocked", reason)
+                return
+            try:
+                subprocess.run(
+                    args,
+                    shell=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+            except Exception as exc:
+                _notify("Scheduled task failed", str(exc))
 
     def _run_loop(self) -> None:
         while not self._stop.is_set():

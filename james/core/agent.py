@@ -10,7 +10,7 @@ from typing import Callable, List, Optional, Tuple
 
 from ..config import settings
 from ..llm.base import LLMProvider, LLMResponse
-from ..tools.registry import DANGEROUS_TOOLS, ToolRegistry
+from ..tools.registry import ToolRegistry, is_dangerous_tool_call
 from .personality import build_system_prompt
 
 
@@ -55,7 +55,7 @@ def _process_confirmation_queue() -> None:
             print(f"\n[confirm] Tool '{req.name}' wants to run with: {req.arguments}")
             allowed = input("Allow? [y/N] ").strip().lower() in {"y", "yes"}
         else:
-            allowed = True
+            allowed = False
         req.respond(allowed)
 
 
@@ -164,7 +164,7 @@ class Agent:
                         self.on_tool_start(call_id, tc.name, tc.arguments)
                     except Exception:
                         pass
-                if self.confirm_dangerous and tc.name in DANGEROUS_TOOLS:
+                if self.confirm_dangerous and is_dangerous_tool_call(tc.name, tc.arguments):
                     allowed = self.confirm(tc.name, tc.arguments)
                     if not allowed:
                         result_text = f"Action '{tc.name}' was denied by the user."

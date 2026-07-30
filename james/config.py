@@ -188,7 +188,7 @@ class AssistantSettings:
 
     # Safety / capability tiers
     # mode: "standard" (read-only + safe tools) or "full" (shell/delete/apps)
-    mode: str = field(default_factory=lambda: _env("JAMES_MODE", "full").lower())
+    mode: str = field(default_factory=lambda: _env("JAMES_MODE", "standard").lower())
     dry_run: bool = field(default_factory=lambda: _bool("DRY_RUN", False))
     audit_log: Path = field(default_factory=lambda: Path(_env("AUDIT_LOG", "./workspace/james_audit.log")).resolve())
 
@@ -199,7 +199,13 @@ class AssistantSettings:
     memory_embedding: bool = field(default_factory=lambda: _bool("MEMORY_EMBEDDING", True))
 
     # Self-improving Skill Forge: auto-generate a native @tool from a successful multi-tool task.
-    auto_skill: bool = field(default_factory=lambda: _bool("AUTO_SKILL", True))
+    auto_skill: bool = field(default_factory=lambda: _bool("AUTO_SKILL", False))
+
+    # Generated skills use a constrained loader. Arbitrary local Python plugins
+    # are trusted code and must be enabled explicitly.
+    external_plugins_enabled: bool = field(
+        default_factory=lambda: _bool("ENABLE_TRUSTED_EXTERNAL_PLUGINS", False)
+    )
 
     # Autonomous File Explorer Manager: let JAMES take 100% agentic control of the
     # filesystem in the background. AUTO_FILE_MANAGER launches a daemon that keeps the
@@ -227,6 +233,11 @@ class AssistantSettings:
         default_factory=lambda: [s.strip() for s in _env("DENIED_TOOLS", "").split(",") if s.strip()]
     )
 
+    history_file: Path = field(
+        default_factory=lambda: Path(
+            _env("CONVERSATION_HISTORY", "./workspace/conversation_history.enc")
+        ).resolve()
+    )
     # Vision model for computer-use / image understanding (defaults to the main LLM model).
     vision_model: str = field(default_factory=lambda: _env("VISION_MODEL", ""))
 
@@ -249,6 +260,7 @@ class Settings:
         self.assistant.audit_log.parent.mkdir(parents=True, exist_ok=True)
         self.assistant.memory_file.parent.mkdir(parents=True, exist_ok=True)
         self.assistant.egress_audit_log.parent.mkdir(parents=True, exist_ok=True)
+        self.assistant.history_file.parent.mkdir(parents=True, exist_ok=True)
 
 
 # A single shared instance used across the application.

@@ -1,16 +1,17 @@
-"""Text-to-speech providers.
-
-* ``pyttsx3``  — offline, cross-platform (default).
-* ``edge``     — Microsoft Edge online voices (free, high quality).
-* ``openai``   — OpenAI TTS.
-* ``elevenlabs`` — ElevenLabs voices.
-* ``none``     — text only.
-"""
+"""Text-to-speech providers."""
 from __future__ import annotations
 
+import asyncio
+import os
+import platform
+import subprocess
 import tempfile
+import threading
+from pathlib import Path
 
 from ..config import VoiceSettings
+
+_AUDIO_CLEANUP_DELAY_SECONDS = 300
 
 
 class TTSProvider:
@@ -29,32 +30,69 @@ class Pyttsx3TTS(TTSProvider):
         self.engine.runAndWait()
 
 
+def _new_audio_path() -> str:
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as handle:
+        return handle.name
+
+
+def _schedule_audio_cleanup(path: str) -> None:
+    def cleanup() -> None:
+        try:
+            Path(path).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    timer = threading.Timer(_AUDIO_CLEANUP_DELAY_SECONDS, cleanup)
+    timer.daemon = True
+    timer.start()
+
+
 def _play_audio(path: str) -> None:
+    """Play an audio file without invoking a command shell."""
     try:
-        import subprocess
+        subprocess.run(
+            ["ffplay", "-nodisp", "-autoexit", path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return
+    except (OSError, subprocess.CalledProcessError):
+        pass
 
-        subprocess.run(["ffplay", "-nodisp", "-autoexit", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        import os
+    system = platform.system()
+    if system == "Windows":
+        os.startfile(path)  # type: ignore[attr-defined]
+    elif system == "Darwin":
+        subprocess.run(["open", path], check=True)
+    else:
+        subprocess.run(["xdg-open", path], check=True)
 
-        os.system(f'start "" "{path}"' if os.name == "nt" else f'xdg-open "{path}"')
+
+def _play_and_cleanup(path: str) -> None:
+    try:
+        _play_audio(path)
+    finally:
+        _schedule_audio_cleanup(path)
 
 
 class EdgeTTS(TTSProvider):
-    def __init__(self, voice="en-US-AriaNeural"):
+    def __init__(self, voice: str = "en-US-AriaNeural"):
         import edge_tts
 
         self.voice = voice
         self.edge_tts = edge_tts
 
     def speak(self, text: str) -> None:
-        import asyncio
-
-        async def _say():
-            comm = self.edge_tts.Communicate(text, self.voice)
-            path = tempfile.mktemp(suffix=".mp3")
-            await comm.save(path)
-            self._play(path)
+        async def say() -> None:
+            path = _new_audio_path()
+            try:
+                communication = self.edge_tts.Communicate(text, self.voice)
+                await communication.save(path)
+                _play_and_cleanup(path)
+            except Exception:
+                _schedule_audio_cleanup(path)
+                raise
 
         try:
             loop = asyncio.get_running_loop()
@@ -64,28 +102,31 @@ class EdgeTTS(TTSProvider):
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, _say())
-                future.result()
+                pool.submit(asyncio.run, say()).result()
         else:
-            asyncio.run(_say())
+            asyncio.run(say())
 
     @staticmethod
-    def _play(path):
-        _play_audio(path)
+    def _play(path: str) -> None:
+        _play_and_cleanup(path)
 
 
 class OpenAITTS(TTSProvider):
-    def __init__(self, api_key: str, voice="alloy"):
+    def __init__(self, api_key: str, voice: str = "alloy"):
         from openai import OpenAI
 
         self.client = OpenAI(api_key=api_key)
         self.voice = voice
 
     def speak(self, text: str) -> None:
-        resp = self.client.audio.speech.create(model="tts-1", voice=self.voice, input=text)
-        path = tempfile.mktemp(suffix=".mp3")
-        resp.stream_to_file(path)
-        _play_audio(path)
+        path = _new_audio_path()
+        try:
+            response = self.client.audio.speech.create(model="tts-1", voice=self.voice, input=text)
+            response.stream_to_file(path)
+            _play_and_cleanup(path)
+        except Exception:
+            _schedule_audio_cleanup(path)
+            raise
 
 
 class ElevenLabsTTS(TTSProvider):
@@ -96,16 +137,20 @@ class ElevenLabsTTS(TTSProvider):
     def speak(self, text: str) -> None:
         import requests
 
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
-        r = requests.post(
-            url,
+        response = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}",
             json={"text": text, "voice_settings": {"stability": 0.5, "similarity_boost": 0.7}},
             headers={"xi-api-key": self.api_key, "Content-Type": "application/json"},
             timeout=30,
         )
-        path = tempfile.mktemp(suffix=".mp3")
-        open(path, "wb").write(r.content)
-        EdgeTTS._play(path)
+        response.raise_for_status()
+        path = _new_audio_path()
+        try:
+            Path(path).write_bytes(response.content)
+            _play_and_cleanup(path)
+        except Exception:
+            _schedule_audio_cleanup(path)
+            raise
 
 
 class NoneTTS(TTSProvider):

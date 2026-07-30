@@ -3,44 +3,22 @@ from __future__ import annotations
 
 import base64
 import re
-import shlex
 import subprocess
 import webbrowser
 from pathlib import Path
 
 from ..config import settings
 from .base import Tool, ToolResult, tool
+from ..core.command_policy import is_safe_command, parse_safe_command
 
 _SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
 
 _URL_SCHEME_RE = re.compile(r'^https?://', re.IGNORECASE)
 
-_SAFE_COMMAND_PREFIXES = (
-    "echo ", "cat ", "head ", "tail ", "grep ", "find ", "wc ",
-    "sort ", "uniq ", "tr ", "sed ", "awk ", "cut ", "paste ",
-    "diff ", "comm ", "file ", "which ", "whereis ", "type ",
-    "date ", "hostname ", "uname ", "uptime ", "whoami ", "id ",
-    "env ", "printenv ", "pwd ", "ls ", "stat ", "du ", "df ",
-    "ping ", "nslookup ", "dig ", "curl ", "wget ", "ip ", "ifconfig ",
-    "python ", "python3 ", "node ", "ruby ", "perl ",
-)
-
-_SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
-
-_URL_SCHEME_RE = re.compile(r'^https?://', re.IGNORECASE)
 
 
 def _is_safe_command(command: str) -> bool:
-    cmd = command.strip().split()[0] if command.strip() else ""
-    return cmd in (
-        "echo", "cat", "head", "tail", "grep", "find", "wc",
-        "sort", "uniq", "tr", "sed", "awk", "cut", "paste",
-        "diff", "comm", "file", "which", "whereis", "type",
-        "date", "hostname", "uname", "uptime", "whoami", "id",
-        "env", "printenv", "pwd", "ls", "stat", "du", "df",
-        "ping", "nslookup", "dig", "curl", "wget", "ip", "ifconfig",
-        "python", "python3", "node", "ruby", "perl",
-    )
+    return is_safe_command(command)
 
 
 @tool(
@@ -53,15 +31,10 @@ def _is_safe_command(command: str) -> bool:
     required=["command"],
 )
 def run_shell_command(command: str, timeout: int = 60) -> ToolResult:
-    if _SHELL_METACHAR_RE.search(command):
-        return ToolResult(ok=False, output=f"Command contains unsafe characters: {command[:80]}")
-    if not _is_safe_command(command):
-        return ToolResult(
-            ok=False,
-            output=f"Command not in allowlist: {command[:80]}. Allowed: echo, cat, grep, find, ls, pwd, date, curl, wget, etc.",
-        )
+    args, reason = parse_safe_command(command)
+    if args is None:
+        return ToolResult(ok=False, output=f"Command blocked: {reason}")
     try:
-        args = shlex.split(command)
         proc = subprocess.run(
             args, shell=False, capture_output=True, text=True, timeout=timeout
         )

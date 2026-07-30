@@ -1,15 +1,19 @@
 """JAMES — top-level orchestrator that wires voice, LLM and tools together."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
 import os
+import tempfile
 import re
+from datetime import datetime
 from typing import List, Optional
 
 from rich.console import Console
 from rich.logging import RichHandler
+from cryptography.fernet import Fernet, InvalidToken
 
 from ..config import settings
 from ..llm import build_provider
@@ -24,31 +28,30 @@ from ..core.scheduler import scheduler
 from ..core.guard import install_offline_guard
 from ..voice import build_stt, build_tts
 from .agent import Agent
+from .secrets import load_or_create_secret
 
 
-def _derive_history_key() -> bytes:
-    secret = os.environ.get("JAMES_HISTORY_KEY", "james-history-secret-change-me")
-    return hashlib.pbkdf2_hmac("sha256", secret.encode("utf-8"), b"james-history-salt", 100_000)
+def _history_fernet() -> Fernet:
+    key_path = settings.assistant.workspace_dir / ".james_history.key"
+    secret = load_or_create_secret("JAMES_HISTORY_KEY", key_path)
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret).digest())
+    return Fernet(key)
 
 
 def _make_wake_re(wake_word: str) -> re.Pattern:
     return re.compile(r'\b' + re.escape(wake_word) + r'\b', re.IGNORECASE)
 
 
-def _xor_encrypt(data: bytes, key: bytes) -> bytes:
-    return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
-
-
 def encrypt_history(history: list) -> bytes:
-    raw = json.dumps(history).encode("utf-8")
-    return _xor_encrypt(raw, _derive_history_key())
+    raw = json.dumps(history, ensure_ascii=False).encode("utf-8")
+    return _history_fernet().encrypt(raw)
 
 
 def decrypt_history(encrypted: bytes) -> list:
-    raw = _xor_encrypt(encrypted, _derive_history_key())
     try:
+        raw = _history_fernet().decrypt(encrypted)
         return json.loads(raw.decode("utf-8"))
-    except Exception:
+    except (InvalidToken, ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
         return []
 
 
@@ -126,46 +129,50 @@ class Assistant:
 
     def _load_history(self) -> None:
         try:
-            path = settings.assistant.workspace_dir / "conversation_history.jsonl"
-            if not path.exists():
+            path = settings.assistant.history_file
+            if path.exists():
+                self._history_encrypted = path.read_bytes()
+                self.history = decrypt_history(self._history_encrypted)
                 return
-            for line in path.read_text(encoding="utf-8").splitlines():
+            legacy_path = settings.assistant.workspace_dir / "conversation_history.jsonl"
+            if not legacy_path.exists():
+                return
+            for line in legacy_path.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
                 if not line:
                     continue
                 try:
-                    msg = json.loads(line)
-                    self.history.append(msg)
+                    self.history.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
+            if self.history:
+                self._save_history()
+                if legacy_path != path:
+                    legacy_path.unlink()
         except Exception:
             pass
 
     def _save_history(self) -> None:
         try:
-            path = settings.assistant.workspace_dir / "conversation_history.jsonl"
+            messages = self.history or decrypt_history(self._history_encrypted)
+            self._history_encrypted = encrypt_history(messages)
+            path = settings.assistant.history_file
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "a", encoding="utf-8") as f:
-                for msg in self.history[-50:]:
-                    f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+            with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
+                handle.write(self._history_encrypted)
+                handle.flush()
+                os.fsync(handle.fileno())
+                temp_name = handle.name
+            os.replace(temp_name, path)
         except Exception:
             pass
 
     def export_conversation(self, format: str = "json") -> str:
         """Export conversation history to a file. Returns the file path."""
         try:
-            path = settings.assistant.workspace_dir / "conversation_history.jsonl"
-            if not path.exists():
-                return ""
-            messages = []
-            for line in path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    messages.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+            messages = self.history or decrypt_history(self._history_encrypted)
+            if not messages and settings.assistant.history_file.exists():
+                messages = decrypt_history(settings.assistant.history_file.read_bytes())
 
             if format == "json":
                 export_path = settings.assistant.workspace_dir / "conversation_export.json"
@@ -207,14 +214,13 @@ class Assistant:
                 "content": f"[Conversation summary]: {summary.content or ''}",
             }
             self.history = [summary_msg] + recent
-            self._save_history()
         except Exception:
             pass
 
     def get_memory_facts(self) -> list[dict]:
         """Return structured memory facts for UI visualization."""
         facts = []
-        for msg in self.history:
+        for msg in self.history or decrypt_history(self._history_encrypted):
             content = msg.get("content", "")
             if msg.get("role") == "user" and content:
                 facts.append({"source": "user", "text": content[:200]})
@@ -247,9 +253,11 @@ class Assistant:
         prev_len = len(self.history)
         reply, self.history = self.agent.run(prompt, history=self.history[-20:])
         self._maybe_auto_forge(user_text, self.history, prev_len)
+        self._summarize_history()
 
         # Re-encrypt history after processing.
         self._history_encrypted = encrypt_history(self.history)
+        self._save_history()
         self.history = []
 
         return reply
@@ -296,8 +304,6 @@ class Assistant:
             reply = "Something went wrong. Please try again."
         self._emit({"type": "reply", "text": reply})
         self.speak(reply)
-        self._save_history()
-        self._summarize_history()
 
     def greet(self) -> None:
         import datetime

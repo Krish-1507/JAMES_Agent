@@ -15,7 +15,7 @@ from james.tools.system_tools import run_shell_command, open_application
 from james.tools.mcp_tools import _validate_mcp_arguments
 from james.tools.forge_tools import _persist_skill, _RESTRICTED_BUILTINS
 from james.core.guard import _is_loopback, install_offline_guard
-from james.core.scheduler import _validate_command, _fire, Job
+from james.core.scheduler import _validate_command, Job, Scheduler
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ class TestRunShellCommand:
     def test_shell_metachar_rejected(self):
         result = run_shell_command.run(command="echo hello; rm -rf /")
         assert result.ok is False
-        assert "unsafe characters" in result.output.lower()
+        assert "blocked" in result.output.lower()
 
     def test_unsafe_command_rejected(self):
         result = run_shell_command.run(command="rm -rf /")
