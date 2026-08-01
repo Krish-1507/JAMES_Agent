@@ -118,7 +118,11 @@ def test_phase0_tools_are_registered() -> None:
     names = [t.name for t in ALL_TOOLS]
     for expected in ("browser_health", "upload_image", "search_plugins", "list_plugins"):
         assert expected in names, f"{expected} should be registered"
-    assert "install_plugin" not in names, "misleading stub tool must not be exposed"
+    # Phase 0 removed the misleading stub install_plugin/remove_plugin; Phase 2
+    # re-added a *real* install_plugin (constrained runtime) plus publish_skill.
+    assert "install_plugin" in names, "install_plugin should now be a real tool"
+    assert "publish_skill" in names, "publish_skill should be registered"
+    assert "remove_plugin" not in names, "remove_plugin is internal, not a tool"
 
 
 def test_upload_image_returns_base64_data_uri(isolated_workspace: Path) -> None:

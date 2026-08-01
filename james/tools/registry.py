@@ -69,7 +69,7 @@ from .forge_tools import (
     load_generated_skill,
     save_skill,
 )
-from .marketplace import list_plugins, search_plugins
+from .marketplace import install_plugin, list_plugins, publish_skill, search_plugins
 from .mcp_tools import discover_mcp_tools
 from .memory_tools import recall, remember
 from .research_tools import learn_skill, research
@@ -121,7 +121,7 @@ ALL_TOOLS: list[Tool] = [
     background_task, list_background_tasks, get_background_result,
     manage_files, list_file_manager_tasks, stop_file_manager,
     help_command, task_dependency_graph,
-    list_plugins, search_plugins,
+    list_plugins, search_plugins, install_plugin, publish_skill,
 ]
 
 # Tools that mutate the system and should ask for confirmation when enabled.

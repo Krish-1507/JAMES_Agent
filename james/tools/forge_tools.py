@@ -374,6 +374,57 @@ def _extract_code(text: str) -> str:
     return ""
 
 
+def _skill_infos() -> list[dict]:
+    """Return (name, description, source) for every saved generated skill."""
+    infos: list[dict] = []
+    if not _PLUGINS_DIR.is_dir():
+        return infos
+    for path in sorted(_PLUGINS_DIR.glob("*.py")):
+        try:
+            source = path.read_text(encoding="utf-8")
+            if not source.startswith(_GENERATED_SKILL_HEADER):
+                continue
+            module = load_generated_skill(path)
+        except Exception:
+            continue
+        for registered_tool in _find_tools(module):
+            infos.append(
+                {
+                    "name": registered_tool.name,
+                    "description": registered_tool.description or "",
+                    "path": str(path),
+                }
+            )
+    return infos
+
+
+def _skill_score(query: str, info: dict) -> float:
+    q = set(query.lower().split())
+    name = set(info["name"].lower().replace("_", " ").split())
+    desc = set(info["description"].lower().split())
+    hits = q & (name | desc)
+    return len(hits) / (len(q) + 1e-9)
+
+
+def get_relevant_skills(query: str, top_k: int = 3) -> str:
+    """Return saved skills relevant to a query, as a hint block (or '')."""
+    if not query or not _PLUGINS_DIR.is_dir():
+        return ""
+    try:
+        infos = _skill_infos()
+    except Exception:
+        return ""
+    if not infos:
+        return ""
+    ranked = sorted(infos, key=lambda i: _skill_score(query, i), reverse=True)[:top_k]
+    lines = []
+    for info in ranked:
+        if _skill_score(query, info) <= 0:
+            continue
+        lines.append(f"- {info['name']}: {info['description']}")
+    return "\n".join(lines) if lines else ""
+
+
 def _derive_name(user_msg: str) -> str:
     words = re.findall(r"[a-z0-9]+", user_msg.lower())
     prefix = "_".join(words[:4]) or "skill"

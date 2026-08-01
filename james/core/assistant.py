@@ -256,11 +256,25 @@ class Assistant:
                 )
             )
             summary = self.llm.chat([{"role": "user", "content": summary_prompt}])
+            summary_text = summary.content or ""
             summary_msg = {
                 "role": "system",
-                "content": f"[Conversation summary]: {summary.content or ''}",
+                "content": f"[Conversation summary]: {summary_text}",
             }
             self.history = [summary_msg, *recent]
+            # Persist the summary to long-term memory so future *sessions*
+            # can recall it — this is the cross-session learning loop.
+            self._remember_summary(summary_text)
+        except Exception:
+            pass
+
+    def _remember_summary(self, summary: str) -> None:
+        if not summary or not settings.assistant.memory_enabled:
+            return
+        try:
+            from ..tools.memory_tools import remember
+
+            remember.run(text=f"[session summary] {summary}")
         except Exception:
             pass
 
@@ -287,6 +301,7 @@ class Assistant:
             self.log.warning("TTS error: %s", exc)
 
     def think(self, user_text: str) -> str:
+        from ..tools.forge_tools import get_relevant_skills
         from ..tools.memory_tools import get_relevant_memories
 
         # Decrypt history for processing.
@@ -295,7 +310,19 @@ class Assistant:
 
         # Surface relevant long-term memory so JAMES "remembers everything".
         mem = get_relevant_memories(user_text)
-        prompt = f"[Relevant memory]\n{mem}\n\n{user_text}" if mem else user_text
+        # Surface saved skills that match, so the loop is read+write: a skill
+        # forged in an earlier session is re-suggested when relevant.
+        skills = get_relevant_skills(user_text)
+
+        hints: list[str] = []
+        if mem:
+            hints.append(f"[Relevant memory]\n{mem}")
+        if skills:
+            hints.append(
+                "[Relevant saved skills — consider invoking one of these "
+                "if it fits]\n" + skills
+            )
+        prompt = "\n\n".join([*hints, user_text]) if hints else user_text
 
         prev_len = len(self.history[-20:])
         reply, self.history = self.agent.run(prompt, history=self.history[-20:])

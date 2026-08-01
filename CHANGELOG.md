@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Closed learning loop (Phase 2):
+  - Skills are now read *and* written: `get_relevant_skills()` re-surfaces
+    saved generated skills that match the current request, so a skill forged
+    in an earlier session is automatically suggested again (skill
+    auto-application).
+  - Cross-session recall: conversation summaries are persisted to long-term
+    memory, so key facts/decisions survive across sessions and are recalled
+    later.
+  - Marketplace is now functional: `publish_skill` bundles a saved generated
+    skill into the catalog, and `install_plugin` installs it back through the
+    constrained Skill Forge runtime. Both are exposed as registered tools.
 - First-run onboarding wizard (`python -m james --setup`) — picks a provider,
   model, and API key interactively and writes a gitignored `.env`. Auto-triggers
   on first launch when no `.env` exists.
@@ -16,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wake-word engine dispatch honors `WAKE_ENGINE`: `always` (continuous listen),
   `none` (no wake word), and `porcupine` (Picovoice, optional dep) with a safe
   fallback to `always` when pvporcupine is missing.
+
+### Fixed
+- `test_http_url_accepted` called the real `open_application`, which opened
+  `https://example.com` in the user's browser on every test run. The test now
+  mocks `webbrowser.open`.
 
 ## [0.2.0] - 2026-08-01
 

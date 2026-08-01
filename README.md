@@ -18,6 +18,10 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
   `/clear`, `/export`, or `python -m james --session <name>`).
 - Wake-word support: `WAKE_ENGINE=always` (continuous listen),
   `porcupine` (low-power Picovoice), or `none`.
+- A closed learning loop: skills forged in one session are re-surfaced when
+  the same kind of request comes up again, conversation summaries persist to
+  long-term memory for cross-session recall, and the marketplace can publish
+  and re-install skills (`publish_skill`, `install_plugin`).
 - Optional offline mode that blocks non-loopback network egress.
 - A lightweight PyQt orb UI and local web dashboard.
 
