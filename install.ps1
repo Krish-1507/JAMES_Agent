@@ -1,6 +1,7 @@
 # JAMES — Windows installer.
 #
-#   irm https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.ps1 | iex
+#   powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.ps1 | iex"
+#   (the wrapper works from both PowerShell and Command Prompt)
 #
 # Auto-clones the repo if you are not already inside it, creates a virtualenv,
 # and installs JAMES with a sensible default extra set (orb GUI + MCP client).

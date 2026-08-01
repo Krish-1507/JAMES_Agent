@@ -41,9 +41,14 @@ Requirements: Python 3.10 or newer and Git.
 # macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.sh | bash
 
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.ps1 | iex
+# Windows — PowerShell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.ps1 | iex"
 ```
+
+> The PowerShell one-liner works from **both** PowerShell and Command Prompt
+> (cmd). `irm` / `iex` are PowerShell-only commands, so the `powershell -Command`
+> wrapper is required when you launch it from cmd — running the bare
+> `irm ... | iex` in cmd silently does nothing.
 
 The installer clones JAMES, creates a virtualenv, installs everything, then
 launches the one-time setup wizard. **Paste your API key, press Enter** — JAMES
