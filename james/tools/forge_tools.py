@@ -12,6 +12,7 @@ import importlib.util
 import os
 import re
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from types import ModuleType
 
@@ -192,11 +193,12 @@ def _validate_skill_ast(code: str) -> list[str]:
             issues.append(f"line {getattr(node, 'lineno', '?')}: {type(node).__name__} is not allowed")
         if isinstance(node, ast.Name) and node.id.startswith("__"):
             issues.append(f"line {node.lineno}: dunder names are not allowed")
-        if isinstance(node, ast.Call):
-            if not isinstance(node.func, ast.Name) or node.func.id not in _ALLOWED_CALLS:
-                issues.append(
-                    f"line {node.lineno}: calls are limited to the approved pure-function set"
-                )
+        if isinstance(node, ast.Call) and (
+            not isinstance(node.func, ast.Name) or node.func.id not in _ALLOWED_CALLS
+        ):
+            issues.append(
+                f"line {node.lineno}: calls are limited to the approved pure-function set"
+            )
         if isinstance(node, ast.Constant):
             if isinstance(node.value, str) and len(node.value) > 10_000:
                 issues.append(f"line {node.lineno}: string literal exceeds 10,000 characters")
@@ -255,10 +257,8 @@ def _atomic_write(path: Path, source: str) -> None:
         os.replace(temp_name, path)
     finally:
         if temp_name:
-            try:
+            with suppress(OSError):
                 Path(temp_name).unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def _persist_skill(name: str, code: str, description: str = "") -> ToolResult:

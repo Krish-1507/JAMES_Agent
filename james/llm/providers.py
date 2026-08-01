@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .base import LLMProvider, LLMResponse, Message, Tool, ToolCall
 
@@ -24,11 +24,11 @@ class OpenAICompatibleProvider(LLMProvider):
         *,
         api_key: str,
         model: str,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         temperature: float = 0.4,
         max_tokens: int = 2048,
         timeout: int = 120,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
     ):
         from openai import OpenAI
 
@@ -44,14 +44,14 @@ class OpenAICompatibleProvider(LLMProvider):
 
     def chat(
         self,
-        messages: List[Message],
-        tools: Optional[List[Tool]] = None,
+        messages: list[Message],
+        tools: list[Tool] | None = None,
         tool_choice: str = "auto",
-        images: Optional[List[str]] = None,
-        model: Optional[str] = None,
+        images: list[str] | None = None,
+        model: str | None = None,
     ) -> LLMResponse:
         effective_model = model or self.model
-        kwargs: Dict[str, Any] = dict(
+        kwargs: dict[str, Any] = dict(
             model=effective_model,
             messages=messages,
             temperature=self.temperature,
@@ -79,7 +79,7 @@ class OpenAICompatibleProvider(LLMProvider):
         choice = resp.choices[0]
         message = choice.message
 
-        tool_calls: List[ToolCall] = []
+        tool_calls: list[ToolCall] = []
         if getattr(message, "tool_calls", None):
             for tc in message.tool_calls:
                 try:
@@ -125,7 +125,7 @@ class AnthropicProvider(LLMProvider):
             raise RuntimeError("Missing ANTHROPIC_API_KEY.")
 
     @staticmethod
-    def _to_anthropic_tools(tools: List[Tool]) -> List[Dict[str, Any]]:
+    def _to_anthropic_tools(tools: list[Tool]) -> list[dict[str, Any]]:
         out = []
         for t in tools:
             fn = t.get("function", t)
@@ -139,9 +139,9 @@ class AnthropicProvider(LLMProvider):
         return out
 
     @staticmethod
-    def _split_system(messages: List[Message]):
+    def _split_system(messages: list[Message]):
         system = None
-        cleaned: List[Message] = []
+        cleaned: list[Message] = []
         for m in messages:
             if m["role"] == "system":
                 system = m["content"]
@@ -149,8 +149,8 @@ class AnthropicProvider(LLMProvider):
             cleaned.append(m)
         return system, cleaned
 
-    def _to_anthropic_messages(self, messages: List[Message]):
-        out: List[Dict[str, Any]] = []
+    def _to_anthropic_messages(self, messages: list[Message]):
+        out: list[dict[str, Any]] = []
         for m in messages:
             role = m["role"]
             content = m["content"]
@@ -168,7 +168,7 @@ class AnthropicProvider(LLMProvider):
                     }
                 )
             elif role == "assistant":
-                blocks: List[Dict[str, Any]] = []
+                blocks: list[dict[str, Any]] = []
                 if content:
                     blocks.append({"type": "text", "text": content})
                 for tc in m.get("tool_calls", []):
@@ -192,15 +192,15 @@ class AnthropicProvider(LLMProvider):
 
     def chat(
         self,
-        messages: List[Message],
-        tools: Optional[List[Tool]] = None,
+        messages: list[Message],
+        tools: list[Tool] | None = None,
         tool_choice: str = "auto",
-        images: Optional[List[str]] = None,
-        model: Optional[str] = None,
+        images: list[str] | None = None,
+        model: str | None = None,
     ) -> LLMResponse:
         system, conv = self._split_system(messages)
         anthropic_messages = self._to_anthropic_messages(conv)
-        kwargs: Dict[str, Any] = dict(
+        kwargs: dict[str, Any] = dict(
             model=self.model,
             messages=anthropic_messages,
             temperature=self.temperature,
@@ -214,7 +214,7 @@ class AnthropicProvider(LLMProvider):
 
         resp = self._client.messages.create(**kwargs)
         content_text = ""
-        tool_calls: List[ToolCall] = []
+        tool_calls: list[ToolCall] = []
         for block in resp.content:
             if block.type == "text":
                 content_text += block.text
@@ -254,7 +254,7 @@ class GeminiProvider(LLMProvider):
             raise RuntimeError("Missing GEMINI_API_KEY.")
 
     @staticmethod
-    def _to_gemini_tools(tools: List[Tool]) -> List[Dict[str, Any]]:
+    def _to_gemini_tools(tools: list[Tool]) -> list[dict[str, Any]]:
         decls = []
         for t in tools:
             fn = t.get("function", t)
@@ -267,7 +267,7 @@ class GeminiProvider(LLMProvider):
             )
         return [{"function_declarations": decls}]
 
-    def _to_gemini_contents(self, messages: List[Message]):
+    def _to_gemini_contents(self, messages: list[Message]):
         mapping = {"user": "user", "assistant": "model", "tool": "user", "system": "user"}
         contents = []
         for m in messages:
@@ -292,14 +292,14 @@ class GeminiProvider(LLMProvider):
 
     def chat(
         self,
-        messages: List[Message],
-        tools: Optional[List[Tool]] = None,
+        messages: list[Message],
+        tools: list[Tool] | None = None,
         tool_choice: str = "auto",
-        images: Optional[List[str]] = None,
-        model: Optional[str] = None,
+        images: list[str] | None = None,
+        model: str | None = None,
     ) -> LLMResponse:
         contents = self._to_gemini_contents(messages)
-        kwargs: Dict[str, Any] = dict(
+        kwargs: dict[str, Any] = dict(
             generation_config={
                 "temperature": self.temperature,
                 "max_output_tokens": self.max_tokens,
@@ -310,7 +310,7 @@ class GeminiProvider(LLMProvider):
 
         resp = self._model.generate_content(contents, **kwargs)
         text = ""
-        tool_calls: List[ToolCall] = []
+        tool_calls: list[ToolCall] = []
         for part in resp.candidates[0].content.parts:
             fc = getattr(part, "function_call", None)
             if fc is not None:

@@ -10,10 +10,9 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 from ..config import settings
-from .base import Tool, ToolResult, tool
+from .base import ToolResult, tool
 
 _EMBED = None
 
@@ -35,7 +34,7 @@ def _embedder():
     return _EMBED
 
 
-def _load() -> List[dict]:
+def _load() -> list[dict]:
     path: Path = settings.assistant.memory_file
     if not path.exists():
         return []
@@ -50,7 +49,7 @@ def _load() -> List[dict]:
     return out
 
 
-def _save(entries: List[dict]) -> None:
+def _save(entries: list[dict]) -> None:
     settings.assistant.memory_file.write_text(
         "\n".join(json.dumps(e, ensure_ascii=False) for e in entries), encoding="utf-8"
     )

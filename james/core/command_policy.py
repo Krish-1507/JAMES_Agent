@@ -5,7 +5,6 @@ import os
 import re
 import shlex
 from pathlib import Path
-from typing import Optional
 
 _SHELL_METACHAR_RE = re.compile(r"[;&|`$(){}[\]<>!#\r\n]")
 
@@ -53,7 +52,7 @@ _VERSION_ONLY_COMMANDS = {"node", "perl", "python", "python3", "ruby"}
 _VERSION_FLAGS = {("--version",), ("-v",), ("-V",)}
 
 
-def parse_safe_command(command: str) -> tuple[Optional[list[str]], str]:
+def parse_safe_command(command: str) -> tuple[list[str] | None, str]:
     command = (command or "").strip()
     if not command:
         return None, "Command is empty."

@@ -16,11 +16,10 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from ..config import settings
 from ..llm.base import LLMProvider
-
+from .base import ToolResult, tool
 
 # A dedicated, fully autonomous system prompt for the file-manager sub-agent. It is
 # deliberately 100% agentic: it must finish the whole job on its own and never ask
@@ -73,13 +72,13 @@ def _resolve_scope(scope: str) -> str:
 
 class FileManager:
     def __init__(self):
-        self._tasks: Dict[str, dict] = {}
+        self._tasks: dict[str, dict] = {}
         self._lock = threading.Lock()
-        self._llm: Optional[LLMProvider] = None
+        self._llm: LLMProvider | None = None
         self._file = settings.assistant.workspace_dir / "file_manager_tasks.jsonl"
         self._file.parent.mkdir(parents=True, exist_ok=True)
         self._load()
-        self._daemon: Optional[threading.Thread] = None
+        self._daemon: threading.Thread | None = None
         self._stop = threading.Event()
 
     def configure(self, llm: LLMProvider) -> None:
@@ -109,8 +108,8 @@ class FileManager:
     def submit(self, scope: str, goal: str = "") -> str:
         if self._llm is None:
             raise RuntimeError("File manager not configured (no LLM provider).")
+        from . import file_tools, forge_tools, research_tools
         from .registry import ToolRegistry
-        from . import file_tools, research_tools, forge_tools
 
         child_tools = [
             file_tools.read_file, file_tools.write_file, file_tools.list_directory,
@@ -158,7 +157,7 @@ class FileManager:
         thread.start()
         return tid
 
-    def get(self, tid: str) -> Optional[dict]:
+    def get(self, tid: str) -> dict | None:
         return self._tasks.get(tid)
 
     def stop(self, tid: str) -> bool:
@@ -170,14 +169,14 @@ class FileManager:
             self._save(t)
         return True
 
-    def list_tasks(self) -> List[dict]:
+    def list_tasks(self) -> list[dict]:
         return [
             {"id": t["id"], "scope": t.get("scope", ""), "status": t["status"]}
             for t in self._tasks.values()
         ]
 
     # ---- daemon ------------------------------------------------------------
-    def start_daemon(self, interval: int, scopes: List[str]) -> None:
+    def start_daemon(self, interval: int, scopes: list[str]) -> None:
         if self._daemon and self._daemon.is_alive():
             return
         self._stop.clear()
@@ -185,9 +184,8 @@ class FileManager:
         def _loop() -> None:
             first = True
             while not self._stop.is_set():
-                if not first:
-                    if self._stop.wait(interval):
-                        break
+                if not first and self._stop.wait(interval):
+                    break
                 first = False
                 if self._stop.is_set():
                     break
@@ -224,9 +222,6 @@ def start_file_manager_daemon() -> None:
 
 def stop_file_manager_daemon() -> None:
     _manager.stop_daemon()
-
-
-from .base import Tool, ToolResult, tool
 
 
 @tool(

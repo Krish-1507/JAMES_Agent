@@ -9,25 +9,25 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-Message = Dict[str, Any]
-Tool = Dict[str, Any]
+Message = dict[str, Any]
+Tool = dict[str, Any]
 
 
 @dataclass
 class ToolCall:
     id: str
     name: str
-    arguments: Dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class LLMResponse:
     content: str = ""
-    tool_calls: List[ToolCall] = field(default_factory=list)
+    tool_calls: list[ToolCall] = field(default_factory=list)
     raw: Any = None
-    finish_reason: Optional[str] = None
+    finish_reason: str | None = None
 
 
 class LLMProvider(ABC):
@@ -36,11 +36,11 @@ class LLMProvider(ABC):
     @abstractmethod
     def chat(
         self,
-        messages: List[Message],
-        tools: Optional[List[Tool]] = None,
+        messages: list[Message],
+        tools: list[Tool] | None = None,
         tool_choice: str = "auto",
-        images: Optional[List[str]] = None,
-        model: Optional[str] = None,
+        images: list[str] | None = None,
+        model: str | None = None,
     ) -> LLMResponse:
         """Send a conversation to the model and return a normalized response.
 

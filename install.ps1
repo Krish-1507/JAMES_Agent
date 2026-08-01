@@ -1,6 +1,6 @@
 # JAMES — Windows installer.
 #
-#   irm https://raw.githubusercontent.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.ps1 | iex
 #
 # Auto-clones the repo if you are not already inside it, creates a virtualenv,
 # and installs JAMES with a sensible default extra set (orb GUI + MCP client).
@@ -23,7 +23,7 @@ param(
 $ErrorActionPreference = "Stop"
 Write-Host "🤖 JAMES — Windows installer" -ForegroundColor Cyan
 
-$REPO_URL = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S"
+$REPO_URL = "https://github.com/Krish-1507/JAMES_Agent"
 $REPO_DIR = "james"
 
 # --- auto-clone if we're not already inside the project -------------------

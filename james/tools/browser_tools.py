@@ -5,11 +5,10 @@ results back as text. Great for booking, shopping, filling web forms, etc.
 """
 from __future__ import annotations
 
-import time
-from typing import Optional
+from contextlib import suppress
 
 from ..config import settings
-from .base import Tool, ToolResult, tool
+from .base import ToolResult, tool
 
 _browser = None
 _page = None
@@ -43,16 +42,16 @@ def _get_page():
         _browser_errors += 1
         _browser = None
         _page = None
-        raise RuntimeError(f"Browser launch failed ({_browser_errors}/{_MAX_BROWSER_ERRORS}): {exc}")
+        raise RuntimeError(
+            f"Browser launch failed ({_browser_errors}/{_MAX_BROWSER_ERRORS}): {exc}"
+        ) from exc
 
 
 def _close():
     global _browser, _page, _browser_errors
     if _browser is not None:
-        try:
+        with suppress(Exception):
             _browser.close()
-        except Exception:
-            pass
     _browser = None
     _page = None
     _browser_errors = 0
@@ -138,10 +137,7 @@ def browser_type(selector: str, text: str) -> ToolResult:
 def browser_extract(selector: str = "") -> ToolResult:
     try:
         page = _get_page()
-        if selector:
-            text = page.locator(selector).inner_text()
-        else:
-            text = page.inner_text()
+        text = page.locator(selector).inner_text() if selector else page.inner_text()
         return ToolResult(ok=True, output=text[:8000])
     except Exception as exc:
         return ToolResult(ok=False, output=f"Extract failed: {exc}")

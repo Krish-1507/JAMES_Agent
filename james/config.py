@@ -11,7 +11,6 @@ import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 try:
     from dotenv import load_dotenv
@@ -59,20 +58,21 @@ def _load_env_file() -> None:
         except Exception:
             pass
         _warn_env_permissions(env_path)
-        _load_tool_permissions(env_path)
 
 
-def _load_tool_permissions(env_path: Path) -> None:
+def _load_tool_permissions() -> None:
+    """Apply TOOL_<name>=true/false from the loaded environment.
+
+    Must run after ``settings`` exists (it mutates ``settings.assistant``).
+    ``TOOL_<name>=false`` denies a tool; ``TOOL_<name>=true`` removes it from
+    the deny list.
+    """
     try:
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
+        for key, value in os.environ.items():
             key = key.strip()
             value = value.strip().lower()
             if key.startswith("TOOL_") and value in ("true", "false"):
-                tool_name = key[5:]
+                tool_name = key[5:].strip().lower()
                 if value == "false" and tool_name not in settings.assistant.denied_tools:
                     settings.assistant.denied_tools.append(tool_name)
                 elif value == "true" and tool_name in settings.assistant.denied_tools:
@@ -173,7 +173,7 @@ class VoiceSettings:
     whisper_api_key: str = field(default_factory=lambda: _env("WHISPER_API_KEY"))
     elevenlabs_api_key: str = field(default_factory=lambda: _env("ELEVENLABS_API_KEY"))
     elevenlabs_voice_id: str = field(default_factory=lambda: _env("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"))
-    mic_device_index: Optional[int] = field(default_factory=lambda: (int(_env("MIC_DEVICE_INDEX")) if _env("MIC_DEVICE_INDEX") else None))
+    mic_device_index: int | None = field(default_factory=lambda: (int(_env("MIC_DEVICE_INDEX")) if _env("MIC_DEVICE_INDEX") else None))
 
 
 @dataclass
@@ -212,7 +212,7 @@ class AssistantSettings:
     # user's main folders organised on an interval.
     auto_file_manager: bool = field(default_factory=lambda: _bool("AUTO_FILE_MANAGER", False))
     file_manager_interval: int = field(default_factory=lambda: _int("FILE_MANAGER_INTERVAL", 1800))
-    file_manager_scopes: List[str] = field(
+    file_manager_scopes: list[str] = field(
         default_factory=lambda: [s.strip() for s in _env("FILE_MANAGER_SCOPES", "Desktop,Documents,Downloads").split(",") if s.strip()]
     )
 
@@ -226,10 +226,10 @@ class AssistantSettings:
     # Empty means use the default DANGEROUS_TOOLS binary mode.
     # When set, only tools in allowed_tools are permitted (denied_tools is ignored).
     # Can also be configured in .env as TOOL_<name>=true/false
-    allowed_tools: List[str] = field(
+    allowed_tools: list[str] = field(
         default_factory=lambda: [s.strip() for s in _env("ALLOWED_TOOLS", "").split(",") if s.strip()]
     )
-    denied_tools: List[str] = field(
+    denied_tools: list[str] = field(
         default_factory=lambda: [s.strip() for s in _env("DENIED_TOOLS", "").split(",") if s.strip()]
     )
 
@@ -265,6 +265,7 @@ class Settings:
 
 # A single shared instance used across the application.
 settings = Settings()
+_load_tool_permissions()
 
 
 def configure_settings(overrides: dict | None = None) -> Settings:

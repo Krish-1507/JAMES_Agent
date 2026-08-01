@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from ..config import settings
-from .base import Tool, ToolResult, tool
+from .base import ToolResult, tool
 
 
 def _resolve(path: str) -> Path:
@@ -80,7 +79,7 @@ def search_files(pattern: str, path: str = "") -> ToolResult:
 
     base = _resolve(path) if path else settings.assistant.workspace_dir
     regex = re.compile(pattern, re.IGNORECASE)
-    hits: List[str] = []
+    hits: list[str] = []
     for f in base.rglob("*"):
         if not f.is_file():
             continue
@@ -213,7 +212,7 @@ def directory_tree(path: str = "", max_depth: int = 3) -> ToolResult:
     base = _resolve(path) if path else settings.assistant.workspace_dir
     if not base.exists():
         return ToolResult(ok=False, output=f"Directory not found: {base}")
-    lines: List[str] = []
+    lines: list[str] = []
 
     def _walk(d: Path, depth: int, prefix: str):
         if depth > max_depth:

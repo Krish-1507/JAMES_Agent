@@ -11,7 +11,6 @@ import base64
 import io
 import json
 import re
-from typing import List, Optional
 
 from ..llm.base import LLMProvider
 
@@ -74,11 +73,11 @@ def run_computer_use(
     provider: LLMProvider,
     instruction: str,
     max_steps: int = 12,
-    model: Optional[str] = None,
+    model: str | None = None,
 ) -> str:
     import pyautogui
 
-    history: List[str] = []
+    history: list[str] = []
     for step in range(1, max_steps + 1):
         img = pyautogui.screenshot()
         buf = io.BytesIO()

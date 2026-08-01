@@ -6,15 +6,14 @@ browse, install, and manage from within JAMES.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from ...config import settings
+from ..base import ToolResult, tool
 
 _MARKETPLACE_FILE = Path(__file__).resolve().parents[2] / "marketplace.json"
 
-_BUILTIN_CATALOG: List[Dict[str, Any]] = [
+_BUILTIN_CATALOG: list[dict[str, Any]] = [
     {
         "name": "file-organizer",
         "description": "Automatically organizes files by type, date, and project.",
@@ -58,7 +57,7 @@ _BUILTIN_CATALOG: List[Dict[str, Any]] = [
 ]
 
 
-def _load_catalog() -> List[Dict[str, Any]]:
+def _load_catalog() -> list[dict[str, Any]]:
     if _MARKETPLACE_FILE.exists():
         try:
             return json.loads(_MARKETPLACE_FILE.read_text(encoding="utf-8"))
@@ -67,13 +66,21 @@ def _load_catalog() -> List[Dict[str, Any]]:
     return list(_BUILTIN_CATALOG)
 
 
-def _save_catalog(catalog: List[Dict[str, Any]]) -> None:
+def _save_catalog(catalog: list[dict[str, Any]]) -> None:
     _MARKETPLACE_FILE.write_text(
         json.dumps(catalog, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
 
-def search_plugins(query: str = "", tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+@tool(
+    "search_plugins",
+    "Search the plugin marketplace catalog for available community plugins.",
+    {
+        "query": {"type": "string", "description": "Search term matched against plugin names and descriptions."},
+        "tags": {"type": "array", "description": "Optional tags to filter by (e.g. files, web, automation)."},
+    },
+)
+def search_plugins(query: str = "", tags: list[str] | None = None) -> ToolResult:
     catalog = _load_catalog()
     results = []
     for plugin in catalog:
@@ -84,10 +91,32 @@ def search_plugins(query: str = "", tags: Optional[List[str]] = None) -> List[Di
             if not any(t in plugin_tags for t in tags):
                 continue
         results.append(plugin)
-    return results
+    if not results:
+        return ToolResult(ok=True, output="No plugins matched your search.", data=results)
+    return ToolResult(
+        ok=True,
+        output="\n".join(f"{p.get('name')} — {p.get('description')}" for p in results),
+        data=results,
+    )
 
 
-def install_plugin(name: str) -> Dict[str, Any]:
+@tool(
+    "list_plugins",
+    "List all plugins available in the marketplace catalog.",
+    {},
+)
+def list_plugins() -> ToolResult:
+    catalog = _load_catalog()
+    if not catalog:
+        return ToolResult(ok=True, output="The marketplace catalog is empty.", data=[])
+    return ToolResult(
+        ok=True,
+        output="\n".join(f"{p.get('name')} — {p.get('description')}" for p in catalog),
+        data=catalog,
+    )
+
+
+def _install_plugin(name: str) -> dict[str, Any]:
     catalog = _load_catalog()
     for plugin in catalog:
         if plugin.get("name") == name:
@@ -95,18 +124,14 @@ def install_plugin(name: str) -> Dict[str, Any]:
     return {"ok": False, "error": f"Plugin '{name}' not found in marketplace."}
 
 
-def list_plugins() -> List[Dict[str, Any]]:
-    return _load_catalog()
-
-
-def add_plugin(plugin: Dict[str, Any]) -> Dict[str, Any]:
+def add_plugin(plugin: dict[str, Any]) -> dict[str, Any]:
     catalog = _load_catalog()
     catalog.append(plugin)
     _save_catalog(catalog)
     return {"ok": True, "message": f"Plugin '{plugin.get('name')}' added to marketplace."}
 
 
-def remove_plugin(name: str) -> Dict[str, Any]:
+def remove_plugin(name: str) -> dict[str, Any]:
     catalog = _load_catalog()
     catalog = [p for p in catalog if p.get("name") != name]
     _save_catalog(catalog)

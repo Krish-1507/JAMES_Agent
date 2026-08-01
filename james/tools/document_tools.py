@@ -1,11 +1,10 @@
 """Document generation tools: Word (.docx), PowerPoint (.pptx) and PDF."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ..config import settings
-from .base import Tool, ToolResult, tool
+from .base import ToolResult, tool
 
 
 def _out(name: str) -> Path:
@@ -108,8 +107,8 @@ def create_powerpoint(filename: str, title: str, slides: list) -> ToolResult:
 )
 def create_pdf(filename: str, title: str, sections: list) -> ToolResult:
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
     p = _out(filename)
     doc = SimpleDocTemplate(str(p), pagesize=A4)

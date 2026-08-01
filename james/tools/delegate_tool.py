@@ -7,9 +7,8 @@ results, so one request can parallelize real work.
 from __future__ import annotations
 
 import concurrent.futures
-from typing import List
 
-from .base import Tool, ToolResult, tool
+from .base import ToolResult, tool
 
 _context = {"llm": None, "on_tool": None, "on_tool_start": None}
 
@@ -54,7 +53,7 @@ def _run_one(task: str) -> str:
         },
     },
 )
-def delegate(task: str = "", tasks: List[str] = None) -> ToolResult:
+def delegate(task: str = "", tasks: list[str] | None = None) -> ToolResult:
     llm = _context["llm"]
     if llm is None:
         return ToolResult(ok=False, output="Delegate is not configured (no LLM provider).")
@@ -72,7 +71,7 @@ def delegate(task: str = "", tasks: List[str] = None) -> ToolResult:
             return ToolResult(ok=False, output=f"Delegation failed: {exc}")
 
     # Parallel fan-out across threads.
-    results: List[str] = [""] * len(jobs)
+    results: list[str] = [""] * len(jobs)
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(jobs), 6)) as ex:
         fut_to_idx = {ex.submit(_run_one, j): i for i, j in enumerate(jobs)}
         for fut in concurrent.futures.as_completed(fut_to_idx):

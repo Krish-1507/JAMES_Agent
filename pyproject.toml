@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "james-assistant"
-version = "0.1.0"
+version = "0.2.0"
 description = "JAMES is an alpha-stage, desktop-first LLM assistant with explicit safety boundaries."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -60,6 +60,13 @@ voice = [
 ]
 # Long-term semantic memory (RAG)
 memory = ["sentence-transformers>=2.2.0", "numpy>=1.24.0"]
+# Development / contributor tooling
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.5.0",
+    "pre-commit>=3.5.0",
+]
 # Everything optional
 all = [
     "PyQt5>=5.15.0",
@@ -83,9 +90,9 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S"
-Repository = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S"
-Issues = "https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/issues"
+Homepage = "https://github.com/Krish-1507/JAMES_Agent"
+Repository = "https://github.com/Krish-1507/JAMES_Agent"
+Issues = "https://github.com/Krish-1507/JAMES_Agent/issues"
 
 [project.scripts]
 james = "james.__main__:main"

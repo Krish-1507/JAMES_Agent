@@ -7,8 +7,8 @@ from html import unescape
 import requests
 from bs4 import BeautifulSoup
 
-from .base import Tool, ToolResult, tool
 from ..config import settings
+from .base import ToolResult, tool
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

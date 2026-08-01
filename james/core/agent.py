@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
-import queue
 import logging
+import queue
 import sys
 import threading
-from typing import Callable, List, Optional, Tuple
+from collections.abc import Callable
+from contextlib import suppress
 
 from ..config import settings
 from ..llm.base import LLMProvider, LLMResponse
@@ -30,8 +31,8 @@ class _ConfirmRequest:
         self._event.set()
 
 
-_confirm_queue: "queue.Queue[_ConfirmRequest]" = queue.Queue()
-_confirm_thread: Optional[threading.Thread] = None
+_confirm_queue: queue.Queue[_ConfirmRequest] = queue.Queue()
+_confirm_thread: threading.Thread | None = None
 
 
 def request_confirmation(name: str, arguments: dict) -> bool:
@@ -75,10 +76,10 @@ class Agent:
         llm: LLMProvider,
         registry: ToolRegistry,
         max_iterations: int = 20,
-        confirm_dangerous: Optional[bool] = None,
-        confirm: Optional[Callable[[str, dict], bool]] = None,
+        confirm_dangerous: bool | None = None,
+        confirm: Callable[[str, dict], bool] | None = None,
         nudge: bool = True,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
     ):
         self.llm = llm
         self.registry = registry
@@ -109,12 +110,20 @@ class Agent:
             ]
         return msg
 
-    def run(self, user_message: str, history: Optional[List[dict]] = None) -> Tuple[str, List[dict]]:
-        """Run one user turn. Returns (final_reply, full_message_history)."""
-        messages: List[dict] = [{"role": "system", "content": self.system_prompt}]
+    def run(self, user_message: str, history: list[dict] | None = None) -> tuple[str, list[dict]]:
+        """Run one user turn. Returns (final_reply, full_message_history).
+
+        The returned history excludes the system prompt this method injected,
+        so callers can feed it straight back in on the next turn without the
+        system prompt accumulating duplicates.
+        """
+        messages: list[dict] = [{"role": "system", "content": self.system_prompt}]
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": user_message})
+
+        def _history_out() -> list[dict]:
+            return messages[1:]
 
         tool_calls_this_turn = 0
         saved_skill = False
@@ -131,7 +140,7 @@ class Agent:
                 if not retry:
                     return (
                         "The LLM API failed and you chose not to retry. Please try again later.",
-                        messages,
+                        _history_out(),
                     )
                 continue
 
@@ -151,7 +160,7 @@ class Agent:
                         "reusable skill so I never re-figure it out. Just say "
                         "\"save this as a skill called <name>\" and I'll persist it."
                     )
-                return reply, messages
+                return reply, _history_out()
 
             for tc in resp.tool_calls:
                 tool_calls_this_turn += 1
@@ -160,10 +169,8 @@ class Agent:
                 self._tool_seq += 1
                 call_id = f"{id(self)}-{self._tool_seq}"
                 if self.on_tool_start:
-                    try:
+                    with suppress(Exception):
                         self.on_tool_start(call_id, tc.name, tc.arguments)
-                    except Exception:
-                        pass
                 if self.confirm_dangerous and is_dangerous_tool_call(tc.name, tc.arguments):
                     allowed = self.confirm(tc.name, tc.arguments)
                     if not allowed:
@@ -174,10 +181,8 @@ class Agent:
                     result_text = self.registry.execute(tc.name, tc.arguments).output
 
                 if self.on_tool:
-                    try:
+                    with suppress(Exception):
                         self.on_tool(call_id, tc.name, tc.arguments, result_text)
-                    except Exception:
-                        pass
 
                 messages.append(
                     {"role": "tool", "tool_call_id": tc.id, "content": result_text}
@@ -185,5 +190,5 @@ class Agent:
 
         return (
             "I reached the step limit while working on that. Here is what I have so far.",
-            messages,
+            _history_out(),
         )

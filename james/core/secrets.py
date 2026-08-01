@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import os
 import secrets
+from contextlib import suppress
 from pathlib import Path
 
 
@@ -46,14 +47,10 @@ def load_or_create_secret(env_name: str, path: Path, *, length: int = 32) -> byt
         with os.fdopen(fd, "wb") as handle:
             handle.write(encoded)
             handle.write(b"\n")
-        try:
+        with suppress(OSError):
             os.chmod(path, 0o600)
-        except OSError:
-            pass
     except Exception:
-        try:
+        with suppress(OSError):
             path.unlink()
-        except OSError:
-            pass
         raise
     return secret

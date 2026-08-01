@@ -15,7 +15,6 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 from .base import Tool, ToolResult
 
@@ -38,10 +37,10 @@ def _run_async(coro):
 class MCPServerSpec:
     name: str
     transport: str = "stdio"
-    command: Optional[str] = None
-    args: List[str] = None
-    env: Optional[dict] = None
-    url: Optional[str] = None
+    command: str | None = None
+    args: list[str] = None
+    env: dict | None = None
+    url: str | None = None
 
 
 async def _with_stdio(spec: MCPServerSpec, async_fn):
@@ -49,10 +48,9 @@ async def _with_stdio(spec: MCPServerSpec, async_fn):
     from mcp.client.stdio import stdio_client
 
     params = StdioServerParameters(command=spec.command, args=spec.args or [], env=spec.env)
-    async with stdio_client(params) as (r, w):
-        async with ClientSession(r, w) as session:
-            await session.initialize()
-            return await async_fn(session)
+    async with stdio_client(params) as (r, w), ClientSession(r, w) as session:
+        await session.initialize()
+        return await async_fn(session)
 
 
 async def _with_http(spec: MCPServerSpec, async_fn):
@@ -61,17 +59,15 @@ async def _with_http(spec: MCPServerSpec, async_fn):
     try:
         from mcp.client.streamable_http import streamablehttp_client
 
-        async with streamablehttp_client(spec.url) as (r, w, _):
-            async with ClientSession(r, w) as session:
-                await session.initialize()
-                return await async_fn(session)
+        async with streamablehttp_client(spec.url) as (r, w, _), ClientSession(r, w) as session:
+            await session.initialize()
+            return await async_fn(session)
     except ImportError:
         from mcp.client.sse import sse_client
 
-        async with sse_client(spec.url) as (r, w):
-            async with ClientSession(r, w) as session:
-                await session.initialize()
-                return await async_fn(session)
+        async with sse_client(spec.url) as (r, w), ClientSession(r, w) as session:
+            await session.initialize()
+            return await async_fn(session)
 
 
 async def _with_session(spec: MCPServerSpec, async_fn):
@@ -134,8 +130,8 @@ def _spec_from_dict(d: dict) -> MCPServerSpec:
     )
 
 
-def load_mcp_configs() -> List[MCPServerSpec]:
-    configs: List[MCPServerSpec] = []
+def load_mcp_configs() -> list[MCPServerSpec]:
+    configs: list[MCPServerSpec] = []
     p = Path(__file__).resolve().parents[2] / "mcp.json"
     if p.exists():
         try:
@@ -176,8 +172,8 @@ class MCPTool(Tool):
             return ToolResult(ok=False, output=f"MCP tool '{self.mcp_name}' failed: {exc}")
 
 
-def discover_mcp_tools() -> List[Tool]:
-    tools: List[Tool] = []
+def discover_mcp_tools() -> list[Tool]:
+    tools: list[Tool] = []
     for spec in load_mcp_configs():
         try:
             async def _list(session):

@@ -11,18 +11,17 @@ import json
 import threading
 import time
 import uuid
-from pathlib import Path
-from typing import Dict, List, Optional
 
 from ..config import settings
 from ..llm.base import LLMProvider
+from .base import ToolResult, tool
 
 
 class BackgroundManager:
     def __init__(self):
-        self._tasks: Dict[str, dict] = {}
+        self._tasks: dict[str, dict] = {}
         self._lock = threading.Lock()
-        self._llm: Optional[LLMProvider] = None
+        self._llm: LLMProvider | None = None
         self._file = settings.assistant.workspace_dir / "background_tasks.jsonl"
         self._file.parent.mkdir(parents=True, exist_ok=True)
         self._load()
@@ -106,10 +105,10 @@ class BackgroundManager:
         thread.start()
         return tid
 
-    def get(self, tid: str) -> Optional[dict]:
+    def get(self, tid: str) -> dict | None:
         return self._tasks.get(tid)
 
-    def list_tasks(self) -> List[dict]:
+    def list_tasks(self) -> list[dict]:
         return [
             {"id": t["id"], "task": t["task"], "status": t["status"]}
             for t in self._tasks.values()
@@ -129,9 +128,6 @@ _manager = BackgroundManager()
 
 def configure_background(llm: LLMProvider) -> None:
     _manager.configure(llm)
-
-
-from .base import Tool, ToolResult, tool
 
 
 @tool(
@@ -184,22 +180,21 @@ def get_background_result(id: str) -> ToolResult:
 )
 def task_dependency_graph(task_id: str = "") -> ToolResult:
     try:
-        history_path = settings.assistant.workspace_dir / "conversation_history.jsonl"
+        from ..core.assistant import decrypt_history
+
+        history_path = settings.assistant.history_file
         if not history_path.exists():
             return ToolResult(ok=False, output="No conversation history found.")
+        try:
+            msgs = decrypt_history(history_path.read_bytes())
+        except Exception:
+            msgs = []
         lines = []
-        for line in history_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                msg = json.loads(line)
-                if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                    for tc in msg["tool_calls"]:
-                        fn = tc.get("function", {})
-                        lines.append(f'  "{fn.get("name", "?")}" [label="{fn.get("name", "?")}"];')
-            except json.JSONDecodeError:
-                continue
+        for msg in msgs:
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    fn = tc.get("function", {})
+                    lines.append(f'  "{fn.get("name", "?")}" [label="{fn.get("name", "?")}"];')
         if not lines:
             return ToolResult(ok=True, output="No tool calls found in history.")
         dot = "digraph ToolCalls {\n  rankdir=LR;\n  node [shape=box];\n" + "\n".join(lines) + "\n}"

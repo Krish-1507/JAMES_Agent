@@ -6,9 +6,7 @@ screenshot -> describe -> act loop using a vision model (local-friendly).
 """
 from __future__ import annotations
 
-from typing import Optional
-
-from .base import Tool, ToolResult, tool
+from .base import ToolResult, tool
 
 _context = {"llm": None}
 
@@ -48,8 +46,9 @@ def computer_use(instruction: str, max_steps: int = 12) -> ToolResult:
     {"path": {"type": "string", "description": "Destination PNG path (default workspace/screenshot.png)."}},
 )
 def screenshot_save(path: str = "") -> ToolResult:
-    import pyautogui
     from pathlib import Path
+
+    import pyautogui
 
     from ..config import settings
 

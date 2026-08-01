@@ -6,10 +6,8 @@ task (this is what OpenClaw calls "model failover").
 """
 from __future__ import annotations
 
-from typing import Any, List
-
 from ..config import LLMSettings
-from .base import LLMProvider, LLMResponse, Message, Tool, ToolCall
+from .base import LLMProvider, LLMResponse
 from .providers import AnthropicProvider, GeminiProvider, OpenAICompatibleProvider
 
 _BASE_URLS = {
@@ -76,7 +74,7 @@ def _is_permanent_error(exc: Exception) -> bool:
 class FailoverProvider(LLMProvider):
     name = "failover"
 
-    def __init__(self, providers: List[LLMProvider]):
+    def __init__(self, providers: list[LLMProvider]):
         self.providers = providers
 
     def validate(self) -> None:
@@ -107,7 +105,7 @@ def build_provider(settings: LLMSettings) -> LLMProvider:
     if not settings.failover:
         return primary
 
-    fallbacks: List[LLMProvider] = []
+    fallbacks: list[LLMProvider] = []
     for spec in settings.failover:
         prov, _, model = spec.partition(":")
         model = model.strip() or settings.model

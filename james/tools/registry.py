@@ -3,6 +3,13 @@
 It loads the built-in tools, then automatically discovers community plugins
 from the ``james.plugins`` package and any local ``plugins/`` folder, so new
 superpowers appear without touching core code.
+
+Security boundary: :meth:`ToolRegistry.execute` is the *only* gated entry
+point (permissions, mode tiers, dry-run, rate limit, and HMAC audit). The
+agent loop always goes through it. Individual tool functions can also be
+invoked directly in Python (e.g. for tests or from other plugins), which is
+intentionally not gated here — treat that as trusted code. Untrusted input
+must always arrive through ``execute``.
 """
 from __future__ import annotations
 
@@ -10,21 +17,30 @@ import hashlib
 import hmac
 import importlib
 import pkgutil
+import threading
 import time
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, List
 
+from ..config import settings
 from ..core.secrets import load_or_create_secret
+from .background_tools import (
+    background_task,
+    get_background_result,
+    list_background_tasks,
+    task_dependency_graph,
+)
 from .base import Tool, ToolResult, tool
 from .browser_tools import (
     browser_click,
     browser_close,
     browser_extract,
+    browser_health,
     browser_navigate,
     browser_screenshot,
     browser_type,
 )
+from .delegate_tool import delegate
 from .desktop_tools import (
     click_at,
     computer_use,
@@ -32,22 +48,11 @@ from .desktop_tools import (
     screenshot_save,
     type_text,
 )
-from .research_tools import learn_skill, research
-from .background_tools import (
-    background_task,
-    get_background_result,
-    list_background_tasks,
-    task_dependency_graph,
-)
-from .delegate_tool import delegate
 from .document_tools import create_pdf, create_powerpoint, create_word_document
 from .file_manager_tools import list_file_manager_tasks, manage_files, stop_file_manager
-from .forge_tools import _GENERATED_SKILL_HEADER, forget_skill, list_skills, load_generated_skill, save_skill
-from .mcp_tools import discover_mcp_tools
-from .marketplace import install_plugin, list_plugins, remove_plugin, search_plugins
 from .file_tools import (
-    create_directory,
     copy_file,
+    create_directory,
     delete_file,
     directory_tree,
     list_directory,
@@ -57,7 +62,17 @@ from .file_tools import (
     search_files,
     write_file,
 )
+from .forge_tools import (
+    _GENERATED_SKILL_HEADER,
+    forget_skill,
+    list_skills,
+    load_generated_skill,
+    save_skill,
+)
+from .marketplace import list_plugins, search_plugins
+from .mcp_tools import discover_mcp_tools
 from .memory_tools import recall, remember
+from .research_tools import learn_skill, research
 from .scheduler_tools import cancel_task, list_scheduled, schedule_task
 from .system_tools import (
     clipboard,
@@ -66,9 +81,9 @@ from .system_tools import (
     open_application,
     run_shell_command,
     take_screenshot,
+    upload_image,
 )
 from .web_tools import fetch_url, web_search
-from ..config import settings
 
 
 @tool(
@@ -89,16 +104,16 @@ def _audit_hmac_key() -> bytes:
     return load_or_create_secret("JAMES_AUDIT_HMAC_KEY", path)
 
 # Built-in registry.
-ALL_TOOLS: List[Tool] = [
+ALL_TOOLS: list[Tool] = [
     read_file, write_file, list_directory, search_files, delete_file,
     create_word_document, create_powerpoint, create_pdf,
     web_search, fetch_url,
     browser_navigate, browser_click, browser_type, browser_extract,
-    browser_screenshot, browser_close,
+    browser_screenshot, browser_close, browser_health,
     remember, recall,
     schedule_task, list_scheduled, cancel_task,
     delegate, save_skill, list_skills, forget_skill,
-    run_shell_command, open_application, take_screenshot,
+    run_shell_command, open_application, take_screenshot, upload_image,
     get_system_info, control_media, clipboard,
     computer_use, click_at, type_text, press_key, screenshot_save,
     create_directory, copy_file, move_file, rename_file, directory_tree,
@@ -106,6 +121,7 @@ ALL_TOOLS: List[Tool] = [
     background_task, list_background_tasks, get_background_result,
     manage_files, list_file_manager_tasks, stop_file_manager,
     help_command, task_dependency_graph,
+    list_plugins, search_plugins,
 ]
 
 # Tools that mutate the system and should ask for confirmation when enabled.
@@ -130,13 +146,13 @@ def is_dangerous_tool_call(name: str, arguments: dict | None = None) -> bool:
     return name in DANGEROUS_TOOLS
 
 
-def _register_module(registry: "ToolRegistry", module: ModuleType) -> None:
+def _register_module(registry: ToolRegistry, module: ModuleType) -> None:
     for value in vars(module).values():
         if isinstance(value, Tool):
             registry.register(value)
 
 
-def _discover_builtin_plugins(registry: "ToolRegistry") -> None:
+def _discover_builtin_plugins(registry: ToolRegistry) -> None:
     try:
         import james.plugins as pkg
 
@@ -151,7 +167,7 @@ def _discover_builtin_plugins(registry: "ToolRegistry") -> None:
         pass
 
 
-def _discover_external_plugins(registry: "ToolRegistry") -> None:
+def _discover_external_plugins(registry: ToolRegistry) -> None:
     ext = Path(__file__).resolve().parents[2] / "plugins"
     if not ext.is_dir():
         return
@@ -176,8 +192,8 @@ def _discover_external_plugins(registry: "ToolRegistry") -> None:
 
 
 class ToolRegistry:
-    def __init__(self, tools: List[Tool] | None = None, discover_plugins: bool = True):
-        self._tools: Dict[str, Tool] = {}
+    def __init__(self, tools: list[Tool] | None = None, discover_plugins: bool = True):
+        self._tools: dict[str, Tool] = {}
         for t in tools or ALL_TOOLS:
             self._tools[t.name] = t
         if discover_plugins:
@@ -190,23 +206,25 @@ class ToolRegistry:
                 print(f"[plugins] MCP discovery failed: {exc}")
         self._call_times: list[float] = []
         self._max_calls_per_minute = 60
+        self._rate_lock = threading.Lock()
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
 
-    def schemas(self) -> List[dict]:
+    def schemas(self) -> list[dict]:
         return [t.schema() for t in self._tools.values()]
 
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         return list(self._tools.keys())
 
     def _check_rate_limit(self) -> bool:
-        now = time.time()
-        self._call_times = [t for t in self._call_times if now - t < 60]
-        if len(self._call_times) >= self._max_calls_per_minute:
-            return False
-        self._call_times.append(now)
-        return True
+        with self._rate_lock:
+            now = time.time()
+            self._call_times = [t for t in self._call_times if now - t < 60]
+            if len(self._call_times) >= self._max_calls_per_minute:
+                return False
+            self._call_times.append(now)
+            return True
 
     def execute(self, name: str, arguments: dict) -> ToolResult:
         t = self._tools.get(name)
@@ -216,7 +234,7 @@ class ToolRegistry:
         if not self._check_rate_limit():
             return ToolResult(
                 ok=False,
-                output=f"Rate limit exceeded: too many tool calls. Please wait before trying again.",
+                output="Rate limit exceeded: too many tool calls. Please wait before trying again.",
             )
 
         # Per-tool permission granularity.

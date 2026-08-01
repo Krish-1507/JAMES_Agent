@@ -9,11 +9,10 @@ research -> understand -> turn it into executable code.
 from __future__ import annotations
 
 import re
-from typing import List, Optional
 
 from ..config import settings
 from ..llm.base import LLMProvider
-from .base import Tool, ToolResult, tool
+from .base import ToolResult, tool
 from .web_tools import fetch_url, web_search
 
 _context = {"llm": None}
@@ -23,9 +22,9 @@ def configure_research(llm: LLMProvider) -> None:
     _context["llm"] = llm
 
 
-def _gather_sources(query: str, max_sources: int) -> List[str]:
+def _gather_sources(query: str, max_sources: int) -> list[str]:
     """Run a web search and fetch the top result pages; return raw text snippets."""
-    parts: List[str] = []
+    parts: list[str] = []
     search = web_search(query, max_results=max(3, min(max_sources, 8)))
     if not search.ok:
         return parts
@@ -44,8 +43,8 @@ _DDG_REDIRECT_RE = re.compile(r'^/l/\?uddg=(.+)$', re.IGNORECASE)
 _URL_RE = re.compile(r'https?://[^\s<>"]+')
 
 
-def _extract_urls(text: str) -> List[str]:
-    urls: List[str] = []
+def _extract_urls(text: str) -> list[str]:
+    urls: list[str] = []
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("•"):
@@ -64,7 +63,7 @@ def _extract_urls(text: str) -> List[str]:
         for candidate in _URL_RE.findall(line):
             urls.append(candidate)
     seen: set[str] = set()
-    unique: List[str] = []
+    unique: list[str] = []
     for u in urls:
         if u not in seen:
             seen.add(u)

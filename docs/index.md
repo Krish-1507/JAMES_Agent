@@ -9,12 +9,12 @@ JAMES is an alpha-stage, desktop-first LLM assistant. It is designed for experim
 3. Run `python -m james --check`, then `python -m james doctor`.
 4. Start with `python -m james --text` and only enable tools you need.
 
-The repository [README](https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S#readme) contains installation, provider, configuration, and roadmap guidance.
+The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contains installation, provider, configuration, and roadmap guidance.
 
 ## Documentation
 
 - [Security model and threat boundaries](security.md)
-- [Contributing](https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/blob/main/CONTRIBUTING.md)
+- [Contributing](https://github.com/Krish-1507/JAMES_Agent/blob/main/CONTRIBUTING.md)
 
 ## Project status
 

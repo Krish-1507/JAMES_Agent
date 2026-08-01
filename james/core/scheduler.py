@@ -9,7 +9,6 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
 
 from ..config import settings
 from .command_policy import is_safe_command, parse_safe_command
@@ -28,9 +27,9 @@ def _notify(title: str, message: str) -> None:
 class Job:
     id: str
     at: str  # ISO datetime
-    command: Optional[str] = None
-    message: Optional[str] = None
-    repeat: Optional[str] = None  # "daily" | "hourly" | None
+    command: str | None = None
+    message: str | None = None
+    repeat: str | None = None  # "daily" | "hourly" | None
     done: bool = False
 
 
@@ -39,14 +38,14 @@ def _validate_command(command: str) -> bool:
 
 
 class Scheduler:
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Path | None = None):
         self.path = path or (settings.assistant.workspace_dir / "schedule.json")
         self._lock = threading.Lock()
         self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     # ---- persistence ----
-    def _load(self) -> List[Job]:
+    def _load(self) -> list[Job]:
         if not self.path.exists():
             return []
         try:
@@ -54,7 +53,7 @@ class Scheduler:
         except Exception:
             return []
 
-    def _save(self, jobs: List[Job]) -> None:
+    def _save(self, jobs: list[Job]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = self.path.with_suffix(self.path.suffix + ".tmp")
         temp_path.write_text(
@@ -64,7 +63,7 @@ class Scheduler:
         os.replace(temp_path, self.path)
 
     # ---- API ----
-    def add(self, at: datetime, *, command: str = None, message: str = None, repeat: str = None) -> str:
+    def add(self, at: datetime, *, command: str | None = None, message: str | None = None, repeat: str | None = None) -> str:
         if command and not _validate_command(command):
             raise ValueError("Scheduled command is not in the read-only command allowlist.")
         if repeat not in (None, "daily", "hourly"):
@@ -79,7 +78,7 @@ class Scheduler:
             self._save(jobs)
         return job.id
 
-    def list_jobs(self) -> List[Job]:
+    def list_jobs(self) -> list[Job]:
         return [j for j in self._load() if not j.done]
 
     def cancel(self, job_id: str) -> bool:

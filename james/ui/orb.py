@@ -16,23 +16,22 @@ from PyQt5.QtGui import QColor, QIcon, QPainter
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
+    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QPlainTextEdit,
     QPushButton,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
-    QHBoxLayout,
-    QMenu,
 )
 
 
 def _make_icon() -> QIcon:
-    from PyQt5.QtCore import QSize
-    from PyQt5.QtGui import QFont, QBrush, QPixmap
+    from PyQt5.QtGui import QBrush, QFont, QPixmap
 
     pix = QPixmap(64, 64)
     pix.fill(QColor("#0b3d5c"))
@@ -226,35 +225,29 @@ class OrbWindow(QMainWindow):
             configs = load_mcp_configs()
             for cfg in configs:
                 if cfg.name == name:
-                    self.log.appendPlainText(f"Toggled MCP server '{name}'")
+                    self.log.appendPlainText(
+                        f"MCP server '{name}' is configured and available. "
+                        "Enable/disable it in your MCP config file, then restart JAMES."
+                    )
                     break
+            else:
+                self.log.appendPlainText(f"Unknown MCP server: {name}")
         except Exception as exc:
             self.log.appendPlainText(f"MCP toggle error: {exc}")
-
-        self.worker = _Worker()
-        self.worker.log.connect(self.log.appendPlainText)
-        self.worker.status.connect(self._on_status)
-        self.worker.canvas.connect(self._on_canvas)
-        self.worker.canvas_start.connect(self._on_canvas_start)
-        self.worker.canvas_done.connect(self._on_canvas_done)
-        self.worker.stream.connect(self._on_stream)
-        self._stream_text = ""
-        self._stream_i = 0
-        self._timer = QTimer()
-        self._timer.timeout.connect(self._tick)
-        self._canvas_items = {}
-        self._paused = False
-        self._cancelled = False
-
-        self._setup_tray()
-        self.start()
 
     def _on_model_change(self, text: str) -> None:
         provider, _, model = text.partition(":")
         import os
 
+        from ..config import settings
+
+        settings.llm.provider = provider
+        settings.llm.model = model
         os.environ["LLM_PROVIDER"] = provider
         os.environ["LLM_MODEL"] = model
+        self.log.appendPlainText(
+            f"Model set to {provider}:{model}. Restart JAMES (Pause → Start) for it to take effect."
+        )
 
     def _on_pause(self) -> None:
         self._paused = not self._paused

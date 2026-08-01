@@ -10,7 +10,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..config import settings
 
@@ -23,23 +23,23 @@ class TaskResult:
     tool_calls: int
     iterations: int
     duration_seconds: float
-    error: Optional[str] = None
+    error: str | None = None
     timestamp: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class BenchmarkSuite:
     name: str
-    tasks: List[Dict[str, Any]]
-    results: List[TaskResult] = field(default_factory=list)
+    tasks: list[dict[str, Any]]
+    results: list[TaskResult] = field(default_factory=list)
 
 
 class Evaluator:
-    def __init__(self, output_dir: Optional[Path] = None):
+    def __init__(self, output_dir: Path | None = None):
         self.output_dir = output_dir or settings.assistant.workspace_dir / "evaluations"
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self._results: List[TaskResult] = []
+        self._results: list[TaskResult] = []
 
     def run_task(
         self,
@@ -78,7 +78,7 @@ class Evaluator:
                 timestamp=datetime.now().isoformat(timespec="seconds"),
             )
 
-    def run_suite(self, suite: BenchmarkSuite, agent_run_fn) -> List[TaskResult]:
+    def run_suite(self, suite: BenchmarkSuite, agent_run_fn) -> list[TaskResult]:
         self._results = []
         for task in suite.tasks:
             result = self.run_task(task.get("description", ""), agent_run_fn)
@@ -99,7 +99,7 @@ class Evaluator:
         }
         path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         if not self._results:
             return {"total": 0, "passed": 0, "failed": 0, "pass_rate": 0.0}
         passed = sum(1 for r in self._results if r.success)
@@ -115,9 +115,9 @@ class Evaluator:
 
 def run_benchmark(
     name: str,
-    tasks: List[Dict[str, Any]],
+    tasks: list[dict[str, Any]],
     agent_run_fn,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     suite = BenchmarkSuite(name=name, tasks=tasks)
     evaluator = Evaluator()
     evaluator.run_suite(suite, agent_run_fn)

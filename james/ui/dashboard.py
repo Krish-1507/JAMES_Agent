@@ -19,12 +19,12 @@ import logging
 import os
 import threading
 from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..config import settings
-from ..tools.registry import ALL_TOOLS, DANGEROUS_TOOLS, ToolRegistry
+from ..tools.registry import ALL_TOOLS, DANGEROUS_TOOLS
 
 logger = logging.getLogger("james.dashboard")
 
@@ -139,20 +139,19 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             })
         return {"tools": tools}
 
+    def _load_history_messages(self) -> list:
+        from ..core.assistant import decrypt_history
+
+        path = settings.assistant.history_file
+        if path.exists():
+            try:
+                return decrypt_history(path.read_bytes())
+            except Exception:
+                return []
+        return []
+
     def _get_history(self) -> dict:
-        history_path = settings.assistant.workspace_dir / "conversation_history.jsonl"
-        messages = []
-        if history_path.exists():
-            for line in history_path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    msg = json.loads(line)
-                    messages.append(msg)
-                except json.JSONDecodeError:
-                    continue
-        return {"messages": messages[-100:]}
+        return {"messages": self._load_history_messages()[-100:]}
 
     def _get_mcp(self) -> dict:
         from ..tools.mcp_tools import load_mcp_configs
@@ -213,17 +212,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             settings.assistant.denied_tools = []
 
     def _serve_export(self, format: str) -> None:
-        history_path = settings.assistant.workspace_dir / "conversation_history.jsonl"
-        messages = []
-        if history_path.exists():
-            for line in history_path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    messages.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+        messages = self._load_history_messages()
 
         if format == "json":
             self.send_response(200)
@@ -357,7 +346,7 @@ loadStatus();loadTools();loadHistory();loadMCP();loadMemory();loadPermissions();
 </script></body></html>"""
 
 
-def start_dashboard(port: int = None) -> threading.Thread:
+def start_dashboard(port: int | None = None) -> threading.Thread:
     port = port or _dashboard_port
     server = HTTPServer(("127.0.0.1", port), _DashboardHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

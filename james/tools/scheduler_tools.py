@@ -1,8 +1,8 @@
 """Scheduler tools exposed to the agent."""
 from __future__ import annotations
 
-from .base import Tool, ToolResult, tool
 from ..core.scheduler import parse_when, scheduler
+from .base import ToolResult, tool
 
 
 @tool(

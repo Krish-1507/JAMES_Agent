@@ -1,11 +1,11 @@
-.PHONY: install dev run check lint test ui new-tool clean
+.PHONY: install dev run check lint test ui new-tool clean format
 
 install:
 	pip install -e .
 
 dev:
-	pip install -e .
-	pip install pytest ruff playwright
+	pip install -e ".[dev,ui,mcp]"
+	pip install playwright
 	playwright install chromium
 
 run:
@@ -20,27 +20,21 @@ ui:
 check:
 	python -m james --check
 
+format:
+	ruff check james tests --fix
+	ruff format james tests
+
 lint:
-	ruff check james || true
-	python -m py_compile james/__main__.py james/config.py \
-		james/llm/*.py james/tools/*.py james/voice/*.py james/core/*.py
+	ruff check james tests
+	python -m compileall -q james
 
 test:
-	python -m james --check
-	python -c "import james.tools.registry as r; assert 'write_file' in r.ToolRegistry().names()"
+	python -m pytest -q
 
 new-tool:
 	@echo "Usage: python -m james --new-tool <name>"
 
 clean:
 	@if [ -d .git ]; then git clean -fdx --exclude=.env --exclude=legacy; fi
-	@if [ -d james/__pycache__ ]; then rm -rf james/__pycache__; fi
-	@if [ -d james/*/__pycache__ ]; then rm -rf james/*/__pycache__; fi
-	@if [ -d james/core/__pycache__ ]; then rm -rf james/core/__pycache__; fi
-	@if [ -d james/tools/__pycache__ ]; then rm -rf james/tools/__pycache__; fi
-	@if [ -d james/ui/__pycache__ ]; then rm -rf james/ui/__pycache__; fi
-	@if [ -d james/voice/__pycache__ ]; then rm -rf james/voice/__pycache__; fi
-	@if [ -d james/llm/__pycache__ ]; then rm -rf james/llm/__pycache__; fi
-	@if [ -d james/evaluation/__pycache__ ]; then rm -rf james/evaluation/__pycache__; fi
-	@if [ -d tests/__pycache__ ]; then rm -rf tests/__pycache__; fi
+	@find . -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 	@echo "Clean complete."

@@ -12,6 +12,11 @@ build/
 dist/
 *.egg-info/
 .eggs/
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+
 
 # Environments
 .env
@@ -37,7 +42,7 @@ sounds/
 /plugins/
 
 
-# Legacy personal scripts (pre-refactor) — kept locally, not in the repo
+# Legacy personal scripts (pre-refactor) ï¿½ kept locally, not in the repo
 james_legacy.py
 jamesUI.py
 jamesUI.ui

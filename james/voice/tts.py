@@ -7,6 +7,7 @@ import platform
 import subprocess
 import tempfile
 import threading
+from contextlib import suppress
 from pathlib import Path
 
 from ..config import VoiceSettings
@@ -37,10 +38,8 @@ def _new_audio_path() -> str:
 
 def _schedule_audio_cleanup(path: str) -> None:
     def cleanup() -> None:
-        try:
+        with suppress(OSError):
             Path(path).unlink(missing_ok=True)
-        except OSError:
-            pass
 
     timer = threading.Timer(_AUDIO_CLEANUP_DELAY_SECONDS, cleanup)
     timer.daemon = True

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from .config import settings
@@ -51,7 +52,7 @@ def {safe}(input: str):
 '''
     path.write_text(template, encoding="utf-8")
     print(f"[+] Created plugin scaffold at {path}")
-    print(f"    Edit it, then run: python -m james --check")
+    print("    Edit it, then run: python -m james --check")
     return 0
 
 

@@ -9,7 +9,6 @@ import pytest
 from james.config import settings
 from james.core.command_policy import parse_safe_command
 from james.core.scheduler import Scheduler
-from james.tools.base import ToolResult
 from james.tools.forge_tools import (
     _GENERATED_SKILL_HEADER,
     _persist_skill,

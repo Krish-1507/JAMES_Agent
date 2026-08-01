@@ -7,10 +7,9 @@ model decides to call.
 """
 from __future__ import annotations
 
-import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 
 @dataclass
@@ -23,14 +22,14 @@ class ToolResult:
 class Tool(ABC):
     name: str = "tool"
     description: str = ""
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    required: List[str] = field(default_factory=list)
+    parameters: dict[str, Any] = field(default_factory=dict)
+    required: list[str] = field(default_factory=list)
 
     @abstractmethod
     def run(self, **kwargs) -> ToolResult:
         raise NotImplementedError
 
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return {
             "type": "function",
             "function": {
@@ -44,7 +43,7 @@ class Tool(ABC):
             },
         }
 
-    def to_openai(self) -> Dict[str, Any]:
+    def to_openai(self) -> dict[str, Any]:
         return self.schema()
 
 
@@ -72,7 +71,7 @@ class FunctionTool(Tool):
                 if not isinstance(value, int):
                     errors.append(f"Parameter '{param_name}' must be an integer, got {type(value).__name__}")
             elif param_type == "number":
-                if not isinstance(value, (int, float)):
+                if not isinstance(value, int | float):
                     errors.append(f"Parameter '{param_name}' must be a number, got {type(value).__name__}")
             elif param_type == "boolean":
                 if not isinstance(value, bool):
@@ -83,17 +82,16 @@ class FunctionTool(Tool):
             elif param_type == "array":
                 if not isinstance(value, list):
                     errors.append(f"Parameter '{param_name}' must be an array, got {type(value).__name__}")
-            elif param_type == "object":
-                if not isinstance(value, dict):
-                    errors.append(f"Parameter '{param_name}' must be an object, got {type(value).__name__}")
+            elif param_type == "object" and not isinstance(value, dict):
+                errors.append(f"Parameter '{param_name}' must be an object, got {type(value).__name__}")
             max_length = param_schema.get("maxLength")
             if max_length is not None and isinstance(value, str) and len(value) > max_length:
                 errors.append(f"Parameter '{param_name}' exceeds maximum length of {max_length}")
             minimum = param_schema.get("minimum")
-            if minimum is not None and isinstance(value, (int, float)) and value < minimum:
+            if minimum is not None and isinstance(value, int | float) and value < minimum:
                 errors.append(f"Parameter '{param_name}' is below minimum of {minimum}")
             maximum = param_schema.get("maximum")
-            if maximum is not None and isinstance(value, (int, float)) and value > maximum:
+            if maximum is not None and isinstance(value, int | float) and value > maximum:
                 errors.append(f"Parameter '{param_name}' exceeds maximum of {maximum}")
         return errors
 
@@ -118,17 +116,8 @@ class FunctionTool(Tool):
         result = self.run(**kwargs)
         yield result
 
-    def stream(self, **kwargs):
-        """Stream tool output in chunks for long-running operations.
 
-        Override this in subclasses that produce incremental output.
-        By default, yields a single chunk with the full result.
-        """
-        result = self.run(**kwargs)
-        yield result
-
-
-def tool(name: str, description: str, parameters: Dict[str, Any], required: List[str] | None = None):
+def tool(name: str, description: str, parameters: dict[str, Any], required: list[str] | None = None):
     def decorator(func):
         return FunctionTool(func, name, description, parameters, required or [])
 

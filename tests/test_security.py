@@ -1,21 +1,19 @@
 """Tests for JAMES security and core functionality."""
 from __future__ import annotations
 
-import json
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from james.config import settings
-from james.tools.base import FunctionTool, ToolResult, tool
-from james.tools.registry import DANGEROUS_TOOLS, ToolRegistry
-from james.tools.system_tools import run_shell_command, open_application
+from james.core.guard import _is_loopback
+from james.core.scheduler import _validate_command
+from james.tools.base import ToolResult, tool
+from james.tools.forge_tools import _RESTRICTED_BUILTINS
 from james.tools.mcp_tools import _validate_mcp_arguments
-from james.tools.forge_tools import _persist_skill, _RESTRICTED_BUILTINS
-from james.core.guard import _is_loopback, install_offline_guard
-from james.core.scheduler import _validate_command, Job, Scheduler
+from james.tools.registry import ToolRegistry
+from james.tools.system_tools import open_application, run_shell_command
 
 
 @pytest.fixture
@@ -95,7 +93,6 @@ class TestForgeSandbox:
 
 class TestAuditLogIntegrity:
     def test_audit_entry_is_hmac_signed(self, temp_workspace: Path):
-        from james.tools.registry import ToolRegistry
         from james.tools.system_tools import get_system_info
 
         reg = ToolRegistry(tools=[get_system_info], discover_plugins=False)
@@ -103,7 +100,6 @@ class TestAuditLogIntegrity:
         assert result.ok is True
 
     def test_tampered_audit_detected(self, temp_workspace: Path):
-        from james.tools.registry import ToolRegistry
 
         reg = ToolRegistry(discover_plugins=False)
         reg._audit("test_tool", {"arg": "val"}, ToolResult(ok=True, output="ok"))
@@ -140,8 +136,7 @@ class TestPerToolPermissions:
             settings.assistant, "allowed_tools", ["read_file", "write_file"]
         )
         monkeypatch.setattr(settings.assistant, "denied_tools", [])
-        from james.tools.registry import ToolRegistry
-        from james.tools.file_tools import read_file, delete_file
+        from james.tools.file_tools import delete_file, read_file
 
         reg = ToolRegistry(tools=[read_file, delete_file], discover_plugins=False)
         result = reg.execute("delete_file", {"path": "/tmp/test"})
@@ -151,7 +146,6 @@ class TestPerToolPermissions:
     def test_denied_tools_enforced(self, monkeypatch):
         monkeypatch.setattr(settings.assistant, "allowed_tools", [])
         monkeypatch.setattr(settings.assistant, "denied_tools", ["run_shell_command"])
-        from james.tools.registry import ToolRegistry
         from james.tools.system_tools import run_shell_command
 
         reg = ToolRegistry(tools=[run_shell_command], discover_plugins=False)
@@ -164,7 +158,6 @@ class TestRateLimiting:
     def test_rate_limit_enforced(self, monkeypatch):
         monkeypatch.setattr(settings.assistant, "allowed_tools", [])
         monkeypatch.setattr(settings.assistant, "denied_tools", [])
-        from james.tools.registry import ToolRegistry
         from james.tools.system_tools import get_system_info
 
         reg = ToolRegistry(tools=[get_system_info], discover_plugins=False)
@@ -237,7 +230,7 @@ class TestEnvSecurity:
 
 class TestConversationEncryption:
     def test_encrypt_decrypt_roundtrip(self):
-        from james.core.assistant import encrypt_history, decrypt_history
+        from james.core.assistant import decrypt_history, encrypt_history
 
         history = [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]
         encrypted = encrypt_history(history)
@@ -245,7 +238,7 @@ class TestConversationEncryption:
         assert decrypted == history
 
     def test_empty_history(self):
-        from james.core.assistant import encrypt_history, decrypt_history
+        from james.core.assistant import decrypt_history, encrypt_history
 
         encrypted = encrypt_history([])
         decrypted = decrypt_history(encrypted)

@@ -6,26 +6,30 @@ import hashlib
 import json
 import logging
 import os
-import tempfile
 import re
+import tempfile
+from contextlib import suppress
 from datetime import datetime
-from typing import List, Optional
 
+from cryptography.fernet import Fernet, InvalidToken
 from rich.console import Console
 from rich.logging import RichHandler
-from cryptography.fernet import Fernet, InvalidToken
 
 from ..config import settings
+from ..core.guard import install_offline_guard
+from ..core.scheduler import scheduler
 from ..llm import build_provider
-from ..tools.registry import ToolRegistry
+from ..tools.background_tools import configure_background
 from ..tools.delegate_tool import configure_delegate
 from ..tools.desktop_tools import configure_computer_use
-from ..tools.research_tools import configure_research
-from ..tools.background_tools import configure_background
-from ..tools.file_manager_tools import configure_file_manager, start_file_manager_daemon, stop_file_manager_daemon
+from ..tools.file_manager_tools import (
+    configure_file_manager,
+    start_file_manager_daemon,
+    stop_file_manager_daemon,
+)
 from ..tools.forge_tools import configure_forge
-from ..core.scheduler import scheduler
-from ..core.guard import install_offline_guard
+from ..tools.registry import ToolRegistry
+from ..tools.research_tools import configure_research
 from ..voice import build_stt, build_tts
 from .agent import Agent
 from .secrets import load_or_create_secret
@@ -85,7 +89,7 @@ class Assistant:
         self.agent = Agent(self.llm, self.registry)
         self.stt = build_stt(settings.voice)
         self.tts = build_tts(settings.voice)
-        self.history: List[dict] = []
+        self.history: list[dict] = []
         self._history_encrypted: bytes = b""
         self._forged_tasks: set = set()
         self._wake_re = _make_wake_re(settings.assistant.wake_word)
@@ -122,10 +126,8 @@ class Assistant:
 
     def _emit(self, event: dict) -> None:
         if self.on_event:
-            try:
+            with suppress(Exception):
                 self.on_event(event)
-            except Exception:
-                pass
 
     def _load_history(self) -> None:
         try:
@@ -213,7 +215,7 @@ class Assistant:
                 "role": "system",
                 "content": f"[Conversation summary]: {summary.content or ''}",
             }
-            self.history = [summary_msg] + recent
+            self.history = [summary_msg, *recent]
         except Exception:
             pass
 
@@ -250,7 +252,7 @@ class Assistant:
         mem = get_relevant_memories(user_text)
         prompt = f"[Relevant memory]\n{mem}\n\n{user_text}" if mem else user_text
 
-        prev_len = len(self.history)
+        prev_len = len(self.history[-20:])
         reply, self.history = self.agent.run(prompt, history=self.history[-20:])
         self._maybe_auto_forge(user_text, self.history, prev_len)
         self._summarize_history()
@@ -299,7 +301,7 @@ class Assistant:
         try:
             self._emit({"type": "thinking"})
             reply = self.think(user_text)
-        except Exception as exc:
+        except Exception:
             self.log.exception("Agent error")
             reply = "Something went wrong. Please try again."
         self._emit({"type": "reply", "text": reply})

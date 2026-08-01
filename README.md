@@ -21,8 +21,8 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
 Requirements: Python 3.10 or newer and Git.
 
 ```bash
-git clone https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S.git
-cd Voice-Automated-Desktop-Agent-J.A.M.E.S
+git clone https://github.com/Krish-1507/JAMES_Agent.git
+cd JAMES_Agent
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate

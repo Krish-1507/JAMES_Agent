@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # JAMES — one-line installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.sh | bash
 #
 # The script auto-clones the repo if you are not already inside it, creates a
 # virtualenv, and installs JAMES with a sensible default extra set
@@ -16,7 +16,7 @@
 #   bash install.sh --minimal        # core only, no GUI / MCP
 set -euo pipefail
 
-REPO_URL="https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S"
+REPO_URL="https://github.com/Krish-1507/JAMES_Agent"
 REPO_DIR="james"
 
 echo "🤖 JAMES — one-line installer"

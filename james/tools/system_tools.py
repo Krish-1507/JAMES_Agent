@@ -8,8 +8,8 @@ import webbrowser
 from pathlib import Path
 
 from ..config import settings
-from .base import Tool, ToolResult, tool
 from ..core.command_policy import is_safe_command, parse_safe_command
+from .base import ToolResult, tool
 
 _SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
 
@@ -154,7 +154,7 @@ def clipboard(text: str = "") -> ToolResult:
 
 @tool(
     "upload_image",
-    "Upload an image file for analysis. Returns a base64-encoded description of the image.",
+    "Encode a local image as a base64 data URI for vision-capable models. Returns the data URI.",
     {
         "path": {"type": "string", "description": "Path to the image file."},
         "description": {"type": "string", "description": "Optional description of what to look for in the image."},
@@ -168,12 +168,20 @@ def upload_image(path: str, description: str = "") -> ToolResult:
             return ToolResult(ok=False, output=f"File not found: {path}")
         if p.stat().st_size > 10_000_000:
             return ToolResult(ok=False, output=f"File too large: {p.stat().st_size} bytes (max 10MB)")
-        data = p.read_bytes()
-        b64 = base64.b64encode(data).decode("utf-8")
+        mime = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }.get(p.suffix.lower(), "application/octet-stream")
+        b64 = base64.b64encode(p.read_bytes()).decode("ascii")
+        uri = f"data:{mime};base64,{b64}"
+        preview = f"{uri[:80]}…({len(uri)} chars total)" if len(uri) > 80 else uri
         return ToolResult(
             ok=True,
-            output=f"Image uploaded: {p.name} ({len(data)} bytes, base64 length {len(b64)}). "
-            f"Pass the base64 data to a vision-capable LLM for analysis.",
+            output=f"Image {p.name} encoded. Data URI ({len(uri)} chars): {preview}",
+            data=uri,
         )
     except Exception as exc:
         return ToolResult(ok=False, output=f"Image upload failed: {exc}")

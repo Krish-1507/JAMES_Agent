@@ -1,6 +1,6 @@
 site_name: JAMES — Just A Modular Executive System
 site_description: An alpha-stage, desktop-first LLM assistant with explicit safety boundaries.
-repo_url: https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S
+repo_url: https://github.com/Krish-1507/JAMES_Agent
 theme:
   name: material
   palette:

@@ -5,8 +5,8 @@ JAMES is an alpha-stage desktop agent. Contributions are welcome, especially imp
 ## Getting started
 
 ```bash
-git clone https://github.com/Krish-1507/Voice-Automated-Desktop-Agent-J.A.M.E.S.git
-cd Voice-Automated-Desktop-Agent-J.A.M.E.S
+git clone https://github.com/Krish-1507/JAMES_Agent.git
+cd JAMES_Agent
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate

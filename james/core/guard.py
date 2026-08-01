@@ -18,7 +18,6 @@ from __future__ import annotations
 import ipaddress
 import socket
 import threading
-from typing import Tuple
 
 from ..config import settings
 
@@ -39,7 +38,7 @@ class BlockedEgress(Exception):
     """Raised when offline mode blocks a non-local network attempt."""
 
 
-def _host_of(address) -> Tuple[str, int]:
+def _host_of(address) -> tuple[str, int]:
     """Normalise a sockaddr into (host, port)."""
     if isinstance(address, tuple):
         host = address[0]
@@ -173,7 +172,7 @@ def _guarded_requests_request(self, url, **kwargs):
 
 def install_offline_guard() -> None:
     """Monkey-patch the socket layer to enforce offline mode. Idempotent."""
-    global _INSTALLED
+    global _INSTALLED, _orig_httpx_request, _orig_httpx_send, _orig_http_client_request, _orig_urllib_request, _orig_urllib3_request, _orig_requests_request
     with _LOCK:
         if _INSTALLED:
             return

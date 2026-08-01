@@ -1,42 +1,15 @@
-# Core runtime
+# Core runtime (matches the `dependencies` in pyproject.toml — that file is
+# the source of truth for installs; this file is kept for tooling that reads
+# requirements.txt directly).
 python-dotenv>=1.0.0
 requests>=2.31.0
 rich>=13.7.0
-pydantic>=2.6.0
 cryptography>=42.0.0
-
-# LLM providers (all optional — install what you use)
+beautifulsoup4>=4.12.0
 openai>=1.30.0
 anthropic>=0.25.0
 google-generativeai>=0.4.0
 
-# Voice
-SpeechRecognition>=3.10.0
-pyttsx3>=2.90
-PyAudio>=0.2.13
-openai-whisper>=20231117
-edge-tts>=6.1.0
-
-# Document generation
-python-docx>=1.1.0
-python-pptx>=0.6.23
-reportlab>=4.1.0
-fpdf2>=2.7.9
-
-# Web / browsing
-beautifulsoup4>=4.12.0
-selenium>=4.18.0
-playwright>=1.43.0
-
-# System automation
-pyautogui>=0.9.54
-pyperclip>=1.8.2
-psutil>=5.9.8
-plyer>=2.1.0
-
-# ---------------------------------------------------------------------------
-# Optional extras (install only what you use)
-# ---------------------------------------------------------------------------
-# GUI orb:        pip install pyqt5
-# Semantic memory: pip install sentence-transformers
-# Wake word:      pip install pvporcupine
+# Optional capabilities install via extras, e.g.:
+#   pip install -e ".[ui,mcp,browser,voice,desktop,docs,memory]"
+#   pip install -e ".[all]"

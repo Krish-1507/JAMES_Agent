@@ -88,7 +88,7 @@ def run_diagnostics() -> str:
 
     # MCP servers
     try:
-        from ..tools.mcp_tools import _with_session, load_mcp_configs
+        from ..tools.mcp_tools import load_mcp_configs
 
         specs = load_mcp_configs()
         if specs:
@@ -148,7 +148,7 @@ def run_diagnostics() -> str:
         with sync_playwright() as p:
             p.chromium.launch(headless=True).stop()
         out.append(_line("PASS", "Playwright Chromium ready"))
-    except Exception as exc:
+    except Exception:
         out.append(_line("WARN", "Browser not ready", "pip install playwright && playwright install chromium"))
 
     # Computer-use (desktop control)

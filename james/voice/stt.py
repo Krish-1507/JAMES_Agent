@@ -7,11 +7,13 @@
 """
 from __future__ import annotations
 
-import io
 import tempfile
-import wave
+from typing import TYPE_CHECKING
 
 from ..config import VoiceSettings
+
+if TYPE_CHECKING:
+    import speech_recognition as sr
 
 
 class STTProvider:
@@ -54,7 +56,8 @@ class WhisperApiSTT(STTProvider):
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 f.write(audio.get_wav_data())
                 path = f.name
-            resp = self.client.audio.transcriptions.create(model="whisper-1", file=open(path, "rb"))
+            with open(path, "rb") as fh:
+                resp = self.client.audio.transcriptions.create(model="whisper-1", file=fh)
             return resp.text or ""
         finally:
             if path:
@@ -102,7 +105,7 @@ class TextSTT(STTProvider):
             return ""
 
 
-def _record(mic_index=None) -> "sr.AudioData | None":
+def _record(mic_index=None) -> sr.AudioData | None:
     import speech_recognition as sr
 
     r = sr.Recognizer()
