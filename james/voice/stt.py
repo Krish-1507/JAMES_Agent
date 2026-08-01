@@ -117,8 +117,12 @@ def _record(mic_index=None) -> sr.AudioData | None:
 def build_stt(cfg: VoiceSettings) -> STTProvider:
     if cfg.stt_provider == "none" or not cfg.enabled:
         return TextSTT()
-    if cfg.stt_provider == "whisper_api":
-        return WhisperApiSTT(cfg.whisper_api_key, cfg.mic_device_index)
-    if cfg.stt_provider == "whisper_local":
-        return WhisperLocalSTT(cfg.mic_device_index)
-    return GoogleSTT(cfg.mic_device_index)
+    try:
+        if cfg.stt_provider == "whisper_api":
+            return WhisperApiSTT(cfg.whisper_api_key, cfg.mic_device_index)
+        if cfg.stt_provider == "whisper_local":
+            return WhisperLocalSTT(cfg.mic_device_index)
+        return GoogleSTT(cfg.mic_device_index)
+    except ImportError:
+        # Optional provider dependency missing — fall back to typed input.
+        return TextSTT()

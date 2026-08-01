@@ -89,23 +89,28 @@ def take_screenshot(filename: str = "screenshot.png") -> ToolResult:
     {},
 )
 def get_system_info() -> ToolResult:
-    try:
-        import platform
+    import platform
 
+    info = {
+        "platform": f"{platform.system()} {platform.release()}",
+        "python": platform.python_version(),
+    }
+    try:
         import psutil
 
-        info = {
-            "platform": f"{platform.system()} {platform.release()}",
-            "cpu_percent": psutil.cpu_percent(interval=0.5),
-            "memory_percent": psutil.virtual_memory().percent,
-            "battery": None,
-        }
+        info.update(
+            {
+                "cpu_percent": psutil.cpu_percent(interval=0.5),
+                "memory_percent": psutil.virtual_memory().percent,
+                "battery": None,
+            }
+        )
         bat = psutil.sensors_battery()
         if bat:
             info["battery"] = f"{bat.percent}% ({'plugged in' if bat.power_plugged else 'on battery'})"
-        return ToolResult(ok=True, output=str(info))
-    except Exception as exc:
-        return ToolResult(ok=False, output=f"Failed: {exc}")
+    except ImportError:
+        info["battery"] = "psutil not installed"
+    return ToolResult(ok=True, output=str(info))
 
 
 @tool(

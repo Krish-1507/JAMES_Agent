@@ -160,10 +160,14 @@ class NoneTTS(TTSProvider):
 def build_tts(cfg: VoiceSettings) -> TTSProvider:
     if cfg.tts_provider == "none" or not cfg.enabled:
         return NoneTTS()
-    if cfg.tts_provider == "edge":
-        return EdgeTTS()
-    if cfg.tts_provider == "openai":
-        return OpenAITTS(cfg.whisper_api_key)
-    if cfg.tts_provider == "elevenlabs":
-        return ElevenLabsTTS(cfg.elevenlabs_api_key, cfg.elevenlabs_voice_id)
-    return Pyttsx3TTS()
+    try:
+        if cfg.tts_provider == "edge":
+            return EdgeTTS()
+        if cfg.tts_provider == "openai":
+            return OpenAITTS(cfg.whisper_api_key)
+        if cfg.tts_provider == "elevenlabs":
+            return ElevenLabsTTS(cfg.elevenlabs_api_key, cfg.elevenlabs_voice_id)
+        return Pyttsx3TTS()
+    except ImportError:
+        # Optional provider dependency missing — fall back to text output.
+        return NoneTTS()
