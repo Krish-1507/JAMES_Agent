@@ -53,9 +53,15 @@ class TestOpenApplication:
         result = open_application.run(target="file:///etc/passwd")
         assert result.ok is False
 
-    def test_http_url_accepted(self):
+    def test_http_url_accepted(self, monkeypatch: pytest.MonkeyPatch):
+        # Never actually open a browser during tests.
+        opened = []
+        monkeypatch.setattr(
+            "james.tools.system_tools.webbrowser.open", lambda url: opened.append(url)
+        )
         result = open_application.run(target="https://example.com")
         assert result.ok is True
+        assert opened == ["https://example.com"]
 
 
 class TestMCPArgumentValidation:
