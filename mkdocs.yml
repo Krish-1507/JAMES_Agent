@@ -7,6 +7,8 @@ theme:
     primary: cyan
 nav:
   - Home: index.md
+  - Architecture: architecture.md
+  - Plugins (SDK): plugins.md
   - Security: security.md
 markdown_extensions:
   - admonition

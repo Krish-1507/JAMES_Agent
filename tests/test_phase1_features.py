@@ -10,16 +10,6 @@ import pytest
 from james.config import settings
 
 
-@pytest.fixture
-def isolated_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setattr(settings.assistant, "workspace_dir", tmp_path)
-    monkeypatch.setattr(settings.assistant, "history_file", tmp_path / "history.enc")
-    monkeypatch.setattr(settings.assistant, "audit_log", tmp_path / "audit.log")
-    monkeypatch.setattr(settings.assistant, "memory_file", tmp_path / "memory.jsonl")
-    monkeypatch.setattr(settings.assistant, "offline_mode", False)
-    return tmp_path
-
-
 def _make_assistant(tmp_path: Path, session: str | None = None):
     from james.core.assistant import Assistant
 

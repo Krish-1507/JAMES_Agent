@@ -45,6 +45,7 @@ _DANGEROUS_IMPORTS = {
 _ALLOWED_IMPORTS = {
     "__future__": {"annotations"},
     "james.tools.base": {"tool", "ToolResult"},
+    "james.sdk": {"tool", "ToolResult"},
 }
 
 _RESTRICTED_BUILTINS = {

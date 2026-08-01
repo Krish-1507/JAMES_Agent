@@ -148,6 +148,7 @@ def _install_plugin(name: str) -> dict[str, Any]:
 
 def _bundle_skill(name: str, description: str = "") -> dict[str, Any]:
     """Read a saved generated skill from plugins/ and wrap it for the catalog."""
+    from ...sdk.manifest import parse_manifest
     from ..forge_tools import (
         _GENERATED_SKILL_HEADER,
         _PLUGINS_DIR,
@@ -168,15 +169,16 @@ def _bundle_skill(name: str, description: str = "") -> dict[str, Any]:
         return {"ok": False, "error": f"Could not load skill: {exc}"}
     if not tools:
         return {"ok": False, "error": "No @tool found in the skill."}
+    manifest = parse_manifest(source)
     tool_desc = description or tools[0].description or ""
     return {
         "ok": True,
         "plugin": {
             "name": name,
             "description": tool_desc,
-            "author": "JAMES Community",
-            "version": "1.0.0",
-            "tags": ["skill"],
+            "author": manifest.author if manifest else "JAMES Community",
+            "version": manifest.version if manifest else "1.0.0",
+            "tags": list(manifest.tags) if manifest and manifest.tags else ["skill"],
             "source": "local",
             "code": source,
             "installed": True,

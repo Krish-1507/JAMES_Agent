@@ -24,33 +24,13 @@ def print_banner() -> None:
 
 
 def _scaffold_tool(name: str) -> int:
-    import re
-    from pathlib import Path
+    from james.sdk import create_plugin
 
-    safe = re.sub(r"[^a-z0-9_]", "_", name.lower()).strip("_") or "my_tool"
-    folder = Path("plugins")
-    folder.mkdir(exist_ok=True)
-    path = folder / f"{safe}.py"
-    if path.exists():
-        print(f"[!] {path} already exists.")
+    try:
+        path = create_plugin(name)
+    except FileExistsError as exc:
+        print(f"[!] {exc}")
         return 1
-    template = f'''"""Community plugin: {safe}."""
-from james.tools.base import tool
-
-
-@tool(
-    "{safe}",
-    "Describe what this tool does.",
-    {{
-        "input": {{"type": "string", "description": "Describe the input."}},
-    }},
-    required=["input"],
-)
-def {safe}(input: str):
-    # TODO: implement the capability here.
-    return f"Processed: {{input}}"
-'''
-    path.write_text(template, encoding="utf-8")
     print(f"[+] Created plugin scaffold at {path}")
     print("    Edit it, then run: python -m james --check")
     return 0

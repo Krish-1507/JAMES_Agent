@@ -13,11 +13,11 @@ The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contai
 
 ## Documentation
 
+- [Architecture](architecture.md)
+- [Writing plugins with the SDK](plugins.md)
 - [Security model and threat boundaries](security.md)
 - [Contributing](https://github.com/Krish-1507/JAMES_Agent/blob/main/CONTRIBUTING.md)
 
 ## Project status
 
-JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, voice providers, memory, encrypted history, and optional offline operation.
-
-The public API and plugin model are still evolving. Do not depend on them as stable integration contracts yet.
+JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, voice providers, memory, encrypted history, optional offline operation, a constrained Skill Forge, and a documented plugin SDK (`james.sdk`).

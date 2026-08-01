@@ -106,15 +106,23 @@ Use `help` in JAMES to inspect tools enabled in the current configuration.
 
 ## Plugins and Skill Forge
 
-There are two intentionally different extension models:
+The [Plugin SDK](docs/plugins.md) (`james.sdk`) is the documented way to write
+extensions. There are two intentionally different extension models:
 
-1. **Generated skills** are constrained, pure `@tool` functions. They are parsed, reject imports/reflection/attribute access/loops, and are revalidated before loading. They are suitable for small deterministic transformations—not arbitrary automation.
+1. **Generated skills** are constrained, pure `@tool` functions. They are parsed, reject imports/reflection/attribute access/loops, and are revalidated before loading. They carry a machine-readable manifest and are suitable for small deterministic transformations—not arbitrary automation.
 2. **Trusted external plugins** are ordinary Python and can execute arbitrary code. They are disabled by default. Enable them only after reviewing their source:
 
    ```dotenv
    ENABLE_TRUSTED_EXTERNAL_PLUGINS=true
    ```
 
+Scaffold a valid, manifest-carrying plugin with:
+
+```bash
+python -m james --new-tool hello
+```
+
+Skills can be published to the local marketplace and reinstalled later.
 Automatic skill generation is off by default. Enable `AUTO_SKILL=true` only if you understand the constraint model and have reviewed the generated skill workflow.
 
 ## Configuration
@@ -157,6 +165,7 @@ Core modules:
 - `james/tools/forge_tools.py` — constrained generated-skill runtime.
 - `james/core/assistant.py` — orchestration and encrypted history.
 - `james/core/guard.py` — offline egress guard.
+- `james/sdk/` — the plugin authoring SDK (manifest, validation, scaffolding).
 
 ## Roadmap to v1
 
@@ -166,7 +175,7 @@ Before recommending JAMES to general users, the project needs:
 - Process/container isolation for high-risk tool execution.
 - Workspace-scoped filesystem permissions.
 - Signed releases, dependency/security scanning, and CI across Windows, macOS, and Linux.
-- A stable plugin SDK with signing and dependency metadata.
+- Plugin signing and dependency metadata (the SDK manifest is in place; signing is not).
 - A guided onboarding flow and clearer recovery/undo behavior.
 
 The near-term product focus is a trustworthy desktop workflow: organize a bounded workspace, summarize local documents, and produce a reviewable result—with the user in control throughout.

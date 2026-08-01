@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Plugin SDK (`james.sdk`) with a stable authoring surface, plugin manifest
+  schema (`# manifest-*` block, `PluginManifest`, `validate_manifest`),
+  `create_plugin` scaffolding, `validate_plugin`, and `load_plugin`.
+- `python -m james --new-tool <name>` now scaffolds a manifest-carrying,
+  runtime-valid plugin via the SDK instead of a raw template.
+- The marketplace bundles skill manifest metadata (`author`, `version`, `tags`)
+  when publishing a skill.
+- Docs: `docs/architecture.md` and `docs/plugins.md` (plugin SDK guide); mkdocs
+  nav and docs index updated; README plugin section and roadmap updated.
 - Closed learning loop (Phase 2):
   - Skills are now read *and* written: `get_relevant_skills()` re-surfaces
     saved generated skills that match the current request, so a skill forged

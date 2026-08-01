@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from james.config import settings
 from james.core.command_policy import parse_safe_command
 from james.core.scheduler import Scheduler
 from james.tools.forge_tools import (
@@ -17,14 +16,6 @@ from james.tools.forge_tools import (
     load_generated_skill_source,
 )
 from james.tools.registry import ToolRegistry, is_dangerous_tool_call
-
-
-@pytest.fixture
-def isolated_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setattr(settings.assistant, "workspace_dir", tmp_path)
-    monkeypatch.setattr(settings.assistant, "history_file", tmp_path / "history.enc")
-    monkeypatch.setattr(settings.assistant, "audit_log", tmp_path / "audit.log")
-    return tmp_path
 
 
 def test_scheduler_is_operational_and_rejects_arbitrary_commands(isolated_workspace: Path) -> None:
