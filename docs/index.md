@@ -1,5 +1,9 @@
 # JAMES documentation
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/James.png" alt="JAMES" width="480">
+</p>
+
 JAMES is an alpha-stage, desktop-first LLM assistant. It is designed for experimentation with local workflows—not unattended access to important systems.
 
 ## Start safely

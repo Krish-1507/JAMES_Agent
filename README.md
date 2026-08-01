@@ -1,5 +1,9 @@
 # JAMES — Just A Modular Executive System
 
+<p align="center">
+  <img src="James.png" alt="JAMES" width="480">
+</p>
+
 > Status: **alpha**. JAMES is a local, desktop-first LLM assistant for people who want to experiment with agentic workflows. Do not give it unrestricted access to important data or production systems yet.
 
 JAMES can work with files, documents, browser sessions, desktop controls, reminders, memory, and selected system information. It supports cloud LLM providers and OpenAI-compatible local endpoints such as Ollama.
