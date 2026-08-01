@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- One-command setup: `install.sh` / `install.ps1` now end with the interactive
+  setup wizard (skipped when an API key is already configured), so the full
+  path from clone to a working assistant is a single command:
+  `curl ... | bash` or `irm ... | iex`.
+- Express onboarding: paste an API key and JAMES detects the provider from its
+  format (`sk-ant-` → Anthropic, `AIza` → Gemini, `gsk_` → Groq,
+  `sk-or-` → OpenRouter, `sk-` → OpenAI) and applies the default model, so a
+  typical setup is "paste key -> Enter -> Enter". Unrecognized keys fall back
+  to the provider menu; local/custom endpoints still supported.
 - Named LLM provider presets: `mistral`, `xai`, `deepseek`, `together`,
   `cerebras`, and `cohere` (all OpenAI-compatible, with base URLs, API-key
   env vars, onboarding entries, `.env.example` keys, and CLI/orb entries).

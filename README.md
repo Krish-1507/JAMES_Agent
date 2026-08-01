@@ -31,6 +31,28 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
 
 Requirements: Python 3.10 or newer and Git.
 
+### One-command install (recommended)
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.sh | bash
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/install.ps1 | iex
+```
+
+The installer clones JAMES, creates a virtualenv, installs everything, then
+launches the one-time setup wizard. **Paste your API key, press Enter** — JAMES
+detects the provider from the key format and writes a working `.env` for you.
+Then start chatting:
+
+```bash
+source .venv/bin/activate      # Windows: .venv\Scripts\Activate.ps1
+python -m james --text
+```
+
+### Manual install
+
 ```bash
 git clone https://github.com/Krish-1507/JAMES_Agent.git
 cd JAMES_Agent
@@ -38,14 +60,16 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -e ".[ui,mcp]"
-python -m james --setup   # interactive wizard: pick provider + key, writes .env
+python -m james --setup   # interactive wizard: paste key, pick voice, writes .env
 python -m james --text
 ```
 
-`--setup` walks you through choosing an LLM provider, model, and API key, and
-writes a `.env` file (gitignored, chmod 600 on POSIX). It auto-runs on first
-launch when no `.env` exists. If you already have a key, just `cp .env.example
-.env` and edit it instead.
+`--setup` runs a quick wizard. In the express path you paste an API key and
+JAMES detects the provider (OpenAI, Anthropic, Gemini, Groq, OpenRouter, ...)
+and applies its default model — just press Enter to accept. It writes a `.env`
+file (gitignored, chmod 600 on POSIX). It auto-runs on first launch when no
+`.env` exists. If you already have a key, just `cp .env.example .env` and edit
+it instead.
 
 For a local Ollama-compatible endpoint:
 

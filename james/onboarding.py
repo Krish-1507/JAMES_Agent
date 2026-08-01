@@ -2,9 +2,14 @@
 
 Runs interactively when no ``.env`` exists (or via ``python -m james --setup``).
 It never writes secrets to the repo — only to ``.env``, which is gitignored.
+
+Express flow: paste an API key and JAMES detects the provider from its format,
+so a typical setup is just "paste key -> Enter -> Enter".
 """
 from __future__ import annotations
 
+import os
+from contextlib import suppress
 from pathlib import Path
 
 from .config import PROJECT_ROOT
@@ -60,6 +65,27 @@ def env_exists() -> bool:
     return (PROJECT_ROOT / ".env").exists()
 
 
+def detect_provider(api_key: str) -> str | None:
+    """Guess the provider from an API key's format, or None if unrecognized."""
+    key = (api_key or "").strip()
+    if not key:
+        return None
+    lowered = key.lower()
+    if lowered.startswith("sk-ant-"):
+        return "anthropic"
+    if lowered.startswith("aiz"):
+        return "gemini"
+    if lowered.startswith("gsk_"):
+        return "groq"
+    if lowered.startswith("sk-or-"):
+        return "openrouter"
+    if lowered.startswith("sk-"):
+        return "openai"
+    # Mistral/DeepSeek/xAI/Together/Cerebras/Cohere keys have no universal
+    # prefix, so they can't be detected reliably — fall through to manual.
+    return None
+
+
 def _ask(prompt: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
     try:
@@ -90,6 +116,11 @@ def _choose_provider() -> str:
 def run_onboarding(force: bool = False) -> Path:
     """Interactive wizard. Returns the path to the generated .env file.
 
+    Express flow (recommended): paste an API key — JAMES detects the provider
+    and offers its default model, so you only answer "Enter" a couple of times.
+    If the key format isn't recognized (or you want a local model), the wizard
+    falls back to the provider menu.
+
     ``force=True`` (used by ``--setup``) re-runs even if ``.env`` exists so
     users can switch providers; the first-run auto-trigger calls with
     ``force=False`` and is skipped when ``.env`` is already present.
@@ -104,21 +135,10 @@ def run_onboarding(force: bool = False) -> Path:
 
     print("\n" + "=" * 60)
     print("  Welcome to JAMES — your open-source, voice-first JARVIS.")
-    print("  Let's get you set up in about 30 seconds.")
+    print("  Setup takes a few seconds. Press Enter to accept defaults.")
     print("=" * 60)
 
-    provider = _choose_provider()
-    key_env = _PROVIDER_KEY[provider]
-    default_model = _DEFAULT_MODEL[provider]
-
-    if provider == "custom":
-        base_url = _ask("Local model base URL", "http://localhost:11434/v1")
-        model = _ask("Model id", default_model)
-        api_key = _ask("API key (blank for local servers like Ollama)")
-    else:
-        base_url = ""
-        model = _ask("Model", default_model)
-        api_key = _ask("API key (create one at the provider's console)")
+    provider, base_url, model, api_key = _prompt_credentials()
 
     voice = _ask("Enable voice mode? (y/n)", "n").lower() in ("y", "yes", "1", "true")
 
@@ -129,7 +149,7 @@ def run_onboarding(force: bool = False) -> Path:
     ]
     if base_url:
         lines.append(f"CUSTOM_BASE_URL={base_url}")
-    lines.append(f"{key_env}={api_key}")
+    lines.append(f"{_PROVIDER_KEY[provider]}={api_key}")
     lines.append("")
     lines.append("# Voice / speech")
     lines.append(f"VOICE_ENABLED={'true' if voice else 'false'}")
@@ -142,11 +162,8 @@ def run_onboarding(force: bool = False) -> Path:
     lines.append("CONFIRM_DANGEROUS_ACTIONS=true")
 
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    try:
-        if hasattr(os := __import__("os"), "chmod"):
-            os.chmod(env_path, 0o600)
-    except Exception:
-        pass
+    with suppress(Exception):
+        os.chmod(env_path, 0o600)
 
     print("\n" + "=" * 60)
     print(f"  [OK] Created {env_path}")
@@ -155,6 +172,43 @@ def run_onboarding(force: bool = False) -> Path:
     print("  Next: run `python -m james` to start chatting.")
     print("=" * 60)
     return env_path
+
+
+def _prompt_credentials() -> tuple[str, str, str, str]:
+    """Gather provider, base URL, model, and API key from the user.
+
+    Returns ``(provider, base_url, model, api_key)``.
+    """
+    api_key = _ask(
+        "Paste your API key (or Enter to choose provider manually)"
+    )
+    detected = detect_provider(api_key)
+    if detected:
+        default_model = _DEFAULT_MODEL[detected]
+        print(f"  • Detected provider: {detected}")
+        provider = _ask("Provider", detected).lower() or detected
+        if provider not in _PROVIDER_KEY:
+            print(f"  Unknown provider '{provider}' — using the provider menu.")
+            provider = _choose_provider()
+        if provider == "custom":
+            base_url = _ask("Local model base URL", "http://localhost:11434/v1")
+            model = _ask("Model id", _DEFAULT_MODEL["custom"])
+            return provider, base_url, model, api_key
+        model = _ask("Model", default_model) or default_model
+        return provider, "", model, api_key
+
+    if api_key:
+        print("  Key format not recognized — choosing provider manually.")
+    provider = _choose_provider()
+    if provider == "custom":
+        base_url = _ask("Local model base URL", "http://localhost:11434/v1")
+        model = _ask("Model id", _DEFAULT_MODEL["custom"])
+        api_key = api_key or _ask("API key (blank for local servers like Ollama)")
+        return provider, base_url, model, api_key
+
+    model = _ask("Model", _DEFAULT_MODEL[provider]) or _DEFAULT_MODEL[provider]
+    api_key = api_key or _ask(f"API key (create one at the {provider} console)")
+    return provider, "", model, api_key
 
 
 def setup_cmd() -> int:

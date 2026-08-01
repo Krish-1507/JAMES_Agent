@@ -80,7 +80,19 @@ echo "✓ JAMES installed"
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  echo "✓ Created .env — edit it with your API keys / model"
+  echo "• Created .env"
+fi
+
+echo "✓ JAMES installed"
+
+# Run the wizard only when no API key is configured yet.
+if ! grep -Eq '^[A-Z0-9_]+_API_KEY=.+' .env 2>/dev/null; then
+  echo
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  One-time setup — paste an API key and"
+  echo "  press Enter; JAMES detects the provider."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  python -m james --setup || true
 fi
 
 python -m james --check || true
@@ -91,9 +103,8 @@ if [ "$WITH_BROWSER" -eq 1 ]; then
 fi
 
 echo
-echo "Next steps:"
-echo "  1. edit .env  (set LLM_PROVIDER + your API key, or LLM_PROVIDER=custom for Ollama)"
-echo "  2. source .venv/bin/activate"
-echo "  3. python -m james --text      # or: python -m james --ui"
+echo "You're all set! Start JAMES with:"
+echo "  source .venv/bin/activate"
+echo "  python -m james --text      # or: python -m james --ui"
 echo
 echo "Want JAMES to teach itself new skills & connect MCP servers? See README.md"

@@ -96,21 +96,40 @@ def test_export_uses_active_session(isolated_workspace: Path) -> None:
 
 
 # --- onboarding -----------------------------------------------------------
-def test_onboarding_writes_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_onboarding_express_detects_anthropic_from_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import james.onboarding as ob
 
     monkeypatch.setattr(ob, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(ob, "env_exists", lambda: False)
     monkeypatch.setattr(
-        sys, "stdin", io.StringIO("2\nclaude-3-test\nsk-test-123\nn\n")
+        sys, "stdin", io.StringIO("sk-ant-123\n\n\nn\n")
     )
 
     env = ob.run_onboarding()
     content = env.read_text(encoding="utf-8")
     assert "LLM_PROVIDER=anthropic" in content
-    assert "LLM_MODEL=claude-3-test" in content
-    assert "ANTHROPIC_API_KEY=sk-test-123" in content
+    assert "LLM_MODEL=claude-3-5-sonnet-latest" in content
+    assert "ANTHROPIC_API_KEY=sk-ant-123" in content
     assert "VOICE_ENABLED=false" in content
+
+
+def test_onboarding_express_accepts_detected_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import james.onboarding as ob
+
+    monkeypatch.setattr(ob, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(ob, "env_exists", lambda: False)
+    monkeypatch.setattr(
+        sys, "stdin", io.StringIO("sk-proj-openaikey123\n\n\nn\n")
+    )
+
+    env = ob.run_onboarding()
+    content = env.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=openai" in content
+    assert "OPENAI_API_KEY=sk-proj-openaikey123" in content
 
 
 def test_onboarding_custom_provider(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,7 +140,7 @@ def test_onboarding_custom_provider(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         sys,
         "stdin",
-        io.StringIO("custom\nhttp://localhost:11434/v1\nllama3.2\n\nn\n"),
+        io.StringIO("\ncustom\nhttp://localhost:11434/v1\nllama3.2\n\nn\n"),
     )
 
     env = ob.run_onboarding()
@@ -129,6 +148,37 @@ def test_onboarding_custom_provider(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert "LLM_PROVIDER=custom" in content
     assert "CUSTOM_BASE_URL=http://localhost:11434/v1" in content
     assert "CUSTOM_API_KEY=" in content
+
+
+def test_onboarding_unknown_key_falls_back_to_menu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import james.onboarding as ob
+
+    monkeypatch.setattr(ob, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(ob, "env_exists", lambda: False)
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO("unrecognized-format-key\n2\nclaude-3-test\n\nn\n"),
+    )
+
+    env = ob.run_onboarding()
+    content = env.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=anthropic" in content
+    assert "LLM_MODEL=claude-3-test" in content
+
+
+def test_detect_provider_from_key_format() -> None:
+    import james.onboarding as ob
+
+    assert ob.detect_provider("sk-ant-test") == "anthropic"
+    assert ob.detect_provider("AIzaSy...") == "gemini"
+    assert ob.detect_provider("gsk_abc") == "groq"
+    assert ob.detect_provider("sk-or-v1-abc") == "openrouter"
+    assert ob.detect_provider("sk-proj-openai") == "openai"
+    assert ob.detect_provider("") is None
+    assert ob.detect_provider("random-key-abc") is None
 
 
 def test_setup_cli_runs_even_when_env_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

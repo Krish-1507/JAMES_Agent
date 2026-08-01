@@ -83,7 +83,19 @@ Write-Host "✓ JAMES installed" -ForegroundColor Green
 
 if (-not (Test-Path .env)) {
     Copy-Item .env.example .env
-    Write-Host "✓ Created .env — edit it with your API keys / model" -ForegroundColor Green
+    Write-Host "✓ Created .env" -ForegroundColor Green
+}
+Write-Host "✓ JAMES installed" -ForegroundColor Green
+
+# Run the wizard only when no API key is configured yet.
+$hasKey = Select-String -Path .env -Pattern '^[A-Z0-9_]+_API_KEY=.+' -Quiet -ErrorAction SilentlyContinue
+if (-not $hasKey) {
+    Write-Host ""
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Host "  One-time setup — paste an API key and" -ForegroundColor Cyan
+    Write-Host "  press Enter; JAMES detects the provider." -ForegroundColor Cyan
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    & $venvPy -m james --setup
 }
 
 & $venvPy -m james --check
@@ -94,9 +106,8 @@ if ($WithBrowser) {
 }
 
 Write-Host ""
-Write-Host "Next steps:"
-Write-Host "  1. edit .env  (set LLM_PROVIDER + your API key, or LLM_PROVIDER=custom for Ollama)"
-Write-Host "  2. .venv\Scripts\Activate.ps1"
-Write-Host "  3. python -m james --text      # or: python -m james --ui"
+Write-Host "You're all set! Start JAMES with:" -ForegroundColor Green
+Write-Host "  .venv\Scripts\Activate.ps1"
+Write-Host "  python -m james --text      # or: python -m james --ui"
 Write-Host ""
 Write-Host "Note: allow microphone access in Windows Settings > Privacy > Microphone for voice mode."
