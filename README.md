@@ -13,6 +13,11 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
 - File, document, browser, memory, scheduling, and desktop-control tools.
 - MCP discovery for configured servers.
 - Local encrypted conversation-history storage and JSON/Markdown export.
+- Named conversation sessions — start, switch, resume, and clear per-session
+  chat history (in-loop commands: `/new`, `/sessions`, `/resume <name>`,
+  `/clear`, `/export`, or `python -m james --session <name>`).
+- Wake-word support: `WAKE_ENGINE=always` (continuous listen),
+  `porcupine` (low-power Picovoice), or `none`.
 - Optional offline mode that blocks non-loopback network egress.
 - A lightweight PyQt orb UI and local web dashboard.
 
@@ -27,10 +32,14 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -e ".[ui,mcp]"
-cp .env.example .env
-python -m james --check
+python -m james --setup   # interactive wizard: pick provider + key, writes .env
 python -m james --text
 ```
+
+`--setup` walks you through choosing an LLM provider, model, and API key, and
+writes a `.env` file (gitignored, chmod 600 on POSIX). It auto-runs on first
+launch when no `.env` exists. If you already have a key, just `cp .env.example
+.env` and edit it instead.
 
 For a local Ollama-compatible endpoint:
 

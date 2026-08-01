@@ -10,6 +10,7 @@ import re
 import tempfile
 from contextlib import suppress
 from datetime import datetime
+from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 from rich.console import Console
@@ -66,6 +67,20 @@ def _fmt_args(args: dict) -> str:
         s = str(args)
     return s[:80]
 
+
+def _session_slug(name: str) -> str:
+    """Sanitize a session name into a safe filename slug."""
+    slug = re.sub(r"[^a-z0-9_-]+", "_", (name or "").strip().lower()).strip("_")
+    return slug or "default"
+
+
+def _session_path(name: str) -> Path:
+    slug = _session_slug(name)
+    if slug == "default":
+        return settings.assistant.history_file
+    return settings.assistant.workspace_dir / "sessions" / f"{slug}.enc"
+
+
 console = Console()
 
 
@@ -79,7 +94,7 @@ def get_logger() -> logging.Logger:
 
 
 class Assistant:
-    def __init__(self):
+    def __init__(self, session: str | None = None):
         self.log = get_logger()
         self.settings = settings
         if settings.assistant.offline_mode:
@@ -93,6 +108,8 @@ class Assistant:
         self._history_encrypted: bytes = b""
         self._forged_tasks: set = set()
         self._wake_re = _make_wake_re(settings.assistant.wake_word)
+        self.session: str | None = session
+        self._history_file = _session_path(session) if session else settings.assistant.history_file
         self._load_history()
         configure_delegate(self.llm, on_tool=self._on_tool, on_tool_start=self._on_tool_start)
         configure_computer_use(self.llm)
@@ -131,10 +148,12 @@ class Assistant:
 
     def _load_history(self) -> None:
         try:
-            path = settings.assistant.history_file
+            path = self._history_file
             if path.exists():
                 self._history_encrypted = path.read_bytes()
                 self.history = decrypt_history(self._history_encrypted)
+                return
+            if self.session:
                 return
             legacy_path = settings.assistant.workspace_dir / "conversation_history.jsonl"
             if not legacy_path.exists():
@@ -158,7 +177,7 @@ class Assistant:
         try:
             messages = self.history or decrypt_history(self._history_encrypted)
             self._history_encrypted = encrypt_history(messages)
-            path = settings.assistant.history_file
+            path = self._history_file
             path.parent.mkdir(parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
                 handle.write(self._history_encrypted)
@@ -173,8 +192,8 @@ class Assistant:
         """Export conversation history to a file. Returns the file path."""
         try:
             messages = self.history or decrypt_history(self._history_encrypted)
-            if not messages and settings.assistant.history_file.exists():
-                messages = decrypt_history(settings.assistant.history_file.read_bytes())
+            if not messages and self._history_file.exists():
+                messages = decrypt_history(self._history_file.read_bytes())
 
             if format == "json":
                 export_path = settings.assistant.workspace_dir / "conversation_export.json"
@@ -193,6 +212,32 @@ class Assistant:
             return str(export_path)
         except Exception:
             return ""
+
+    def list_sessions(self) -> list[str]:
+        """Return available named sessions (excluding the default history)."""
+        sessions_dir = settings.assistant.workspace_dir / "sessions"
+        try:
+            if not sessions_dir.exists():
+                return []
+            return sorted(
+                path.stem
+                for path in sessions_dir.glob("*.enc")
+                if _session_slug(path.stem) == path.stem
+            )
+        except Exception:
+            return []
+
+    def switch_session(self, name: str) -> None:
+        """Persist the current conversation and switch to another named session."""
+        self._save_history()
+        self.history = []
+        self._history_encrypted = b""
+        self.session = _session_slug(name)
+        self._history_file = _session_path(self.session)
+        self._load_history()
+
+    def current_session(self) -> str:
+        return self.session or "default"
 
     def _summarize_history(self) -> None:
         if len(self.history) < 20:
@@ -315,6 +360,42 @@ class Assistant:
         self.speak(f"Good {part}, {settings.assistant.user_name}. {settings.assistant.name} online. How can I help?")
 
     def voice_loop(self) -> None:
+        engine = (settings.assistant.wake_engine or "always").lower()
+        if engine == "none":
+            self.speak("Listening continuously. Say 'exit' or 'stop' to quit.")
+            while True:
+                try:
+                    heard = self.stt.listen()
+                except Exception as exc:
+                    self.log.warning("Listening error: %s", exc)
+                    continue
+                if not heard:
+                    continue
+                console.print(f"[dim]heard:[/dim] {heard}")
+                if heard.lower().strip() in {"exit", "stop", "quit"}:
+                    self.speak("Goodbye!")
+                    break
+                self.handle_turn(heard)
+            return
+
+        if engine == "porcupine":
+            import importlib.util
+
+            if not importlib.util.find_spec("pvporcupine"):
+                self.speak("Porcupine wake word requested but not installed.")
+                self.log.warning(
+                    "WAKE_ENGINE=porcupine but pvporcupine is not installed. "
+                    "Fall back to WAKE_ENGINE=always, or `pip install pvporcupine`."
+                )
+                self._voice_loop_wake_word()
+                return
+            self._voice_loop_porcupine()
+            return
+
+        # default: "always" — continuous mic, respond only after the wake word
+        self._voice_loop_wake_word()
+
+    def _voice_loop_wake_word(self) -> None:
         self.speak(f"Say '{settings.assistant.wake_word}' to wake me up.")
         while True:
             try:
@@ -333,9 +414,32 @@ class Assistant:
                 if command:
                     self.handle_turn(command)
 
+    def _voice_loop_porcupine(self) -> None:
+        from .porcupine_engine import PorcupineWakeEngine
+
+        engine = PorcupineWakeEngine(settings.assistant.porcupine_key)
+        self.speak("Wake word armed. Say it to start a command.")
+        try:
+            while True:
+                keyword = engine.listen()
+                if not keyword:
+                    continue
+                self.speak("Yes?")
+                command = self.stt.listen()
+                if command and command.lower().strip() in {"exit", "stop", "quit"}:
+                    self.speak("Goodbye!")
+                    break
+                if command:
+                    self.handle_turn(command)
+        finally:
+            engine.close()
+
     def text_loop(self) -> None:
         self.greet()
         console.print("[dim]Type 'exit' or 'quit' to leave.[/dim]")
+        console.print(
+            "[dim]Session commands: /new, /sessions, /resume <name>, /clear, /export[/dim]"
+        )
         while True:
             try:
                 user_text = input(f"{settings.assistant.user_name}: ").strip()
@@ -344,7 +448,48 @@ class Assistant:
             if user_text.lower() in {"exit", "quit", "stop"}:
                 self.speak("Goodbye!")
                 break
+            if self._handle_session_command(user_text):
+                continue
             self.handle_turn(user_text)
+
+    def _handle_session_command(self, cmd: str) -> bool:
+        """Handle in-loop session commands. Returns True if the command was consumed."""
+        cmd = cmd.strip()
+        if not cmd.startswith("/"):
+            return False
+        parts = cmd.split(maxsplit=1)
+        verb = parts[0].lower()
+        arg = parts[1].strip() if len(parts) > 1 else ""
+
+        if verb == "/new":
+            self.switch_session(f"conversation-{int(datetime.now().timestamp())}")
+            console.print(f"[dim]New session started ({self.current_session()}).[/dim]")
+            return True
+        if verb == "/sessions":
+            sessions = self.list_sessions()
+            if not sessions:
+                console.print("[dim]No named sessions yet. Use /new to create one.[/dim]")
+            else:
+                console.print("[dim]Saved sessions:[/dim] " + ", ".join(sessions))
+            return True
+        if verb == "/resume":
+            if not arg:
+                console.print("[dim]Usage: /resume <session-name>[/dim]")
+                return True
+            self.switch_session(arg)
+            console.print(f"[dim]Resumed session '{self.current_session()}'.[/dim]")
+            return True
+        if verb == "/clear":
+            self.history = []
+            self._history_encrypted = b""
+            self._save_history()
+            console.print("[dim]Current session cleared.[/dim]")
+            return True
+        if verb == "/export":
+            path = self.export_conversation("markdown")
+            console.print(f"[dim]Exported to {path}.[/dim]")
+            return True
+        return False
 
     def run(self) -> None:
         try:

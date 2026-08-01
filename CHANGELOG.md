@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- First-run onboarding wizard (`python -m james --setup`) — picks a provider,
+  model, and API key interactively and writes a gitignored `.env`. Auto-triggers
+  on first launch when no `.env` exists.
+- Named conversation sessions: `--session <name>` flag plus in-loop `/new`,
+  `/sessions`, `/resume <name>`, `/clear`, `/export` commands. Each session is
+  encrypted and stored under `workspace/sessions/<name>.enc`.
+- Wake-word engine dispatch honors `WAKE_ENGINE`: `always` (continuous listen),
+  `none` (no wake word), and `porcupine` (Picovoice, optional dep) with a safe
+  fallback to `always` when pvporcupine is missing.
+
 ## [0.2.0] - 2026-08-01
 
 ### Fixed

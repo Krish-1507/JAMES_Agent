@@ -71,11 +71,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--eval", metavar="SUITE", help="Run a benchmark suite and print results.")
     parser.add_argument("--offline", action="store_true", help="Privacy mode: block ALL non-local network egress (audited).")
     parser.add_argument("--doctor", action="store_true", help="Run self-diagnostic checks and exit.")
+    parser.add_argument("--setup", action="store_true", help="Run the interactive first-run setup wizard.")
+    parser.add_argument("--session", metavar="NAME", help="Start or resume a named conversation session.")
     parser.add_argument("command", nargs="?", help="Optional command: 'doctor'.")
     args = parser.parse_args(argv)
 
     if args.new_tool:
         return _scaffold_tool(args.new_tool)
+
+    if args.setup:
+        from .onboarding import setup_cmd
+
+        return setup_cmd()
 
     if args.doctor or args.command == "doctor":
         from james.core.doctor import run_diagnostics
@@ -146,11 +153,25 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if not settings.llm.api_key:
-        print(
-            "\n[!] No API key configured for provider "
-            f"'{settings.llm.provider}'.\n"
-            "    Copy .env.example to .env and set the relevant key, or use a local model (LLM_PROVIDER=custom)."
-        )
+        from .onboarding import env_exists, run_onboarding
+
+        if not env_exists():
+            print(
+                "\n[!] No .env found and no API key configured.\n"
+                "    This looks like a first run — let's set you up."
+            )
+            try:
+                run_onboarding()
+            except (EOFError, KeyboardInterrupt):
+                print("\nSetup cancelled. Run `python -m james --setup` anytime.")
+                return 0
+        else:
+            print(
+                "\n[!] No API key configured for provider "
+                f"'{settings.llm.provider}'.\n"
+                "    Edit your .env and set the relevant key, or use a local model "
+                "(LLM_PROVIDER=custom). Run `python -m james --setup` to re-run the wizard."
+            )
         return 1
 
     if args.offline:
@@ -161,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         install_offline_guard()
 
     try:
-        assistant = Assistant()
+        assistant = Assistant(session=args.session)
         assistant.run()
     except KeyboardInterrupt:
         print("\nGoodbye.")
