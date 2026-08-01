@@ -9,7 +9,9 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
 ## What works today
 
 - Text and voice interaction, with configurable STT/TTS providers.
-- OpenAI, Anthropic, Gemini, OpenRouter, Groq, and OpenAI-compatible providers.
+- OpenAI, Anthropic, Gemini, OpenRouter, Groq, Mistral, xAI (Grok), DeepSeek,
+  Together, Cerebras, Cohere, and any OpenAI-compatible custom endpoint (Ollama,
+  LM Studio, vLLM...).
 - File, document, browser, memory, scheduling, and desktop-control tools.
 - MCP discovery for configured servers.
 - Local encrypted conversation-history storage and JSON/Markdown export.
@@ -60,6 +62,29 @@ Before enabling extra capabilities, run:
 ```bash
 python -m james doctor
 python -m pytest -q
+```
+
+## Voice (speech-to-speech)
+
+The default pipeline is a full speech loop: microphone → STT → LLM → TTS →
+speaker, with wake-word control. Out of the box it uses natural, neural
+Microsoft Edge voices (no API key):
+
+```dotenv
+VOICE_ENABLED=true
+STT_PROVIDER=whisper_local
+TTS_PROVIDER=edge
+```
+
+- **TTS**: `edge` (recommended — free, human-like, needs the `[voice]` extra),
+  `pyttsx3` (offline system voices), or premium `openai` / `elevenlabs`
+  (most human, need their API key). Missing `edge-tts` falls back to
+  `pyttsx3`, then text output — JAMES never fails to start.
+- **STT**: `whisper_local` (offline, recommended), `whisper_api`, or `google`.
+- Run `python -m james --voice` to force voice mode, `--text` for text only.
+
+```bash
+pip install -e ".[voice]"   # installs whisper + edge-tts + pyttsx3 + pyaudio
 ```
 
 ## Safety model

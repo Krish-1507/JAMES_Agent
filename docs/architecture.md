@@ -34,7 +34,8 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
 - **`james.tools.base`** — the tool framework: `Tool`, `FunctionTool`,
   `ToolResult`, and the `tool` decorator.
 - **`james.llm`** — pluggable LLM providers (OpenAI, Anthropic, Gemini,
-  OpenRouter, Groq, custom/local).
+  OpenRouter, Groq, Mistral, xAI, DeepSeek, Together, Cerebras, Cohere, and
+  any OpenAI-compatible custom/local endpoint) with automatic failover.
 - **`james.config`** — validated settings loaded from `.env`.
 - **`james.sdk`** — the stable plugin authoring surface (see
   [plugins.md](plugins.md)).

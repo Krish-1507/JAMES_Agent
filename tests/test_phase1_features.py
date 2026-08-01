@@ -121,7 +121,7 @@ def test_onboarding_custom_provider(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         sys,
         "stdin",
-        io.StringIO("6\nhttp://localhost:11434/v1\nllama3.2\n\nn\n"),
+        io.StringIO("custom\nhttp://localhost:11434/v1\nllama3.2\n\nn\n"),
     )
 
     env = ob.run_onboarding()

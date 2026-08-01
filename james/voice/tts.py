@@ -169,5 +169,12 @@ def build_tts(cfg: VoiceSettings) -> TTSProvider:
             return ElevenLabsTTS(cfg.elevenlabs_api_key, cfg.elevenlabs_voice_id)
         return Pyttsx3TTS()
     except ImportError:
-        # Optional provider dependency missing — fall back to text output.
-        return NoneTTS()
+        pass
+    # The requested provider's optional dependency is missing. If edge was
+    # requested, fall back to pyttsx3 (still audible) before giving up to text.
+    if cfg.tts_provider == "edge":
+        try:
+            return Pyttsx3TTS()
+        except ImportError:
+            pass
+    return NoneTTS()

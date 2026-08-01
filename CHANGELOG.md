@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Named LLM provider presets: `mistral`, `xai`, `deepseek`, `together`,
+  `cerebras`, and `cohere` (all OpenAI-compatible, with base URLs, API-key
+  env vars, onboarding entries, `.env.example` keys, and CLI/orb entries).
+  Combined with the existing `openai`, `anthropic`, `gemini`, `openrouter`,
+  `groq`, `custom`, and `LLM_FAILOVER`, JAMES now covers every major provider
+  out of the box.
+- TTS now defaults to `edge` (free, neural, human-like Microsoft voices, no
+  API key). Missing `edge-tts` falls back to `pyttsx3`, then text output, so
+  voice never prevents startup. `pyttsx3`, `openai`, and `elevenlabs` remain
+  selectable.
+- README voice/speech-to-speech section and updated provider lists in docs.
 - Plugin SDK (`james.sdk`) with a stable authoring surface, plugin manifest
   schema (`# manifest-*` block, `PluginManifest`, `validate_manifest`),
   `create_plugin` scaffolding, `validate_plugin`, and `load_plugin`.

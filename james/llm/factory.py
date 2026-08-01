@@ -14,12 +14,21 @@ _BASE_URLS = {
     "openai": "https://api.openai.com/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "groq": "https://api.groq.com/openai/v1",
+    "mistral": "https://api.mistral.ai/v1",
+    "xai": "https://api.x.ai/v1",
+    "deepseek": "https://api.deepseek.com/v1",
+    "together": "https://api.together.xyz/v1",
+    "cerebras": "https://api.cerebras.ai/v1",
+    "cohere": "https://api.cohere.com/v1",
 }
+
+# OpenAI-compatible providers. Anything here can also be reached via `custom`.
+_OPENAI_COMPATIBLE = ("openai", "openrouter", "groq", "mistral", "xai", "deepseek", "together", "cerebras", "cohere", "custom")
 
 
 def _build_one(provider: str, model: str, settings: LLMSettings) -> LLMProvider:
     provider = provider.lower()
-    if provider in ("openai", "openrouter", "groq", "custom"):
+    if provider in _OPENAI_COMPATIBLE:
         base_url = _BASE_URLS.get(provider, settings.custom_base_url)
         extra_headers = {}
         if provider == "openrouter":

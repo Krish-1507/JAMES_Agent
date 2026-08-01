@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--text", action="store_true", help="Force text-only mode (no microphone).")
     parser.add_argument("--voice", action="store_true", help="Force voice mode.")
-    parser.add_argument("--provider", help="Override LLM_PROVIDER (openai|anthropic|gemini|openrouter|groq|custom).")
+    parser.add_argument("--provider", help="Override LLM_PROVIDER (openai|anthropic|gemini|openrouter|groq|mistral|xai|deepseek|together|cerebras|cohere|custom).")
     parser.add_argument("--model", help="Override the model id.")
     parser.add_argument("--check", action="store_true", help="Validate configuration and exit.")
     parser.add_argument("--new-tool", metavar="NAME", help="Scaffold a new plugin tool file in ./plugins/.")

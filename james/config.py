@@ -146,6 +146,12 @@ class LLMSettings:
     gemini_api_key: str = field(default_factory=lambda: _env("GEMINI_API_KEY"))
     openrouter_api_key: str = field(default_factory=lambda: _env("OPENROUTER_API_KEY"))
     groq_api_key: str = field(default_factory=lambda: _env("GROQ_API_KEY"))
+    mistral_api_key: str = field(default_factory=lambda: _env("MISTRAL_API_KEY"))
+    xai_api_key: str = field(default_factory=lambda: _env("XAI_API_KEY"))
+    deepseek_api_key: str = field(default_factory=lambda: _env("DEEPSEEK_API_KEY"))
+    together_api_key: str = field(default_factory=lambda: _env("TOGETHER_API_KEY"))
+    cerebras_api_key: str = field(default_factory=lambda: _env("CEREBRAS_API_KEY"))
+    cohere_api_key: str = field(default_factory=lambda: _env("COHERE_API_KEY"))
     custom_base_url: str = field(default_factory=lambda: _env("CUSTOM_BASE_URL", "http://localhost:11434/v1"))
     custom_api_key: str = field(default_factory=lambda: _env("CUSTOM_API_KEY"))
     openrouter_referer: str = field(default_factory=lambda: _env("OPENROUTER_HTTP_REFERER"))
@@ -160,6 +166,12 @@ class LLMSettings:
             "gemini": self.gemini_api_key,
             "openrouter": self.openrouter_api_key,
             "groq": self.groq_api_key,
+            "mistral": self.mistral_api_key,
+            "xai": self.xai_api_key,
+            "deepseek": self.deepseek_api_key,
+            "together": self.together_api_key,
+            "cerebras": self.cerebras_api_key,
+            "cohere": self.cohere_api_key,
             "custom": self.custom_api_key,
         }
         return mapping.get(self.provider, "")
@@ -169,7 +181,7 @@ class LLMSettings:
 class VoiceSettings:
     enabled: bool = field(default_factory=lambda: _bool("VOICE_ENABLED", True))
     stt_provider: str = field(default_factory=lambda: _env("STT_PROVIDER", "whisper_local").lower())
-    tts_provider: str = field(default_factory=lambda: _env("TTS_PROVIDER", "pyttsx3").lower())
+    tts_provider: str = field(default_factory=lambda: _env("TTS_PROVIDER", "edge").lower())
     whisper_api_key: str = field(default_factory=lambda: _env("WHISPER_API_KEY"))
     elevenlabs_api_key: str = field(default_factory=lambda: _env("ELEVENLABS_API_KEY"))
     elevenlabs_voice_id: str = field(default_factory=lambda: _env("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"))

@@ -15,6 +15,12 @@ PROVIDERS = [
     "gemini",
     "openrouter",
     "groq",
+    "mistral",
+    "xai",
+    "deepseek",
+    "together",
+    "cerebras",
+    "cohere",
     "custom",
 ]
 
@@ -25,6 +31,12 @@ _PROVIDER_KEY = {
     "gemini": "GEMINI_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
     "groq": "GROQ_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "xai": "XAI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "together": "TOGETHER_API_KEY",
+    "cerebras": "CEREBRAS_API_KEY",
+    "cohere": "COHERE_API_KEY",
     "custom": "CUSTOM_API_KEY",
 }
 
@@ -34,6 +46,12 @@ _DEFAULT_MODEL = {
     "gemini": "gemini-2.0-flash",
     "openrouter": "deepseek/deepseek-chat",
     "groq": "llama-3.3-70b-versatile",
+    "mistral": "mistral-large-latest",
+    "xai": "grok-3",
+    "deepseek": "deepseek-chat",
+    "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "cerebras": "llama-3.3-70b",
+    "cohere": "command-r-plus",
     "custom": "local-model",
 }
 

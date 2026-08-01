@@ -125,7 +125,7 @@ class OrbWindow(QMainWindow):
         model_layout = QHBoxLayout()
         model_layout.addWidget(QLabel("Model:"))
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["openai:gpt-4o-mini", "anthropic:claude-3-sonnet", "groq:llama-3.3-70b", "custom:local"])
+        self.model_combo.addItems(["openai:gpt-4o-mini", "anthropic:claude-3-sonnet", "groq:llama-3.3-70b", "mistral:mistral-large-latest", "xai:grok-3", "deepseek:deepseek-chat", "together:meta-llama/Llama-3.3-70B-Instruct-Turbo", "cerebras:llama-3.3-70b", "cohere:command-r-plus", "custom:local"])
         self.model_combo.currentTextChanged.connect(self._on_model_change)
         model_layout.addWidget(self.model_combo)
         layout.addLayout(model_layout)
