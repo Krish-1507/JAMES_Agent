@@ -31,14 +31,14 @@ def hello(name: str) -> ToolResult:
 ```
 
 Save it as `plugins/hello.py`. It is discovered automatically on the next run
-and appears in the registry (see `python -m james --check`).
+and appears in the registry (see `james --check`).
 
 ## Scaffolding
 
 Use the CLI to generate a valid, manifest-carrying plugin file:
 
 ```bash
-python -m james --new-tool hello
+james --new-tool hello
 ```
 
 `create_plugin` from the SDK does the same in code:

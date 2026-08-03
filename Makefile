@@ -1,4 +1,4 @@
-.PHONY: install dev run check lint test ui new-tool clean format
+.PHONY: install dev run text ui check lint test new-tool clean format doctor
 
 install:
 	pip install -e .
@@ -9,16 +9,19 @@ dev:
 	playwright install chromium
 
 run:
-	python -m james
+	james
 
 text:
-	python -m james --text
+	james --text
 
 ui:
-	python -m james --ui
+	james --ui
 
 check:
-	python -m james --check
+	james --check
+
+doctor:
+	james doctor
 
 format:
 	ruff check james tests --fix
@@ -32,7 +35,7 @@ test:
 	python -m pytest -q
 
 new-tool:
-	@echo "Usage: python -m james --new-tool <name>"
+	@echo "Usage: james --new-tool <name>"
 
 clean:
 	@if [ -d .git ]; then git clean -fdx --exclude=.env --exclude=legacy; fi

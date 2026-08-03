@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `james` is now a first-class global command after install: `james` launches
+  the desktop app (default), `james --text` / `james --voice` run the terminal
+  CLI, and `james --setup` re-runs the wizard. Installers install to a stable
+  per-user location (`~/james`), expose the command on PATH, and create
+  desktop/start-menu shortcuts, so it works from any terminal.
+- Windows fix: the false-positive "`.env` is world-readable" warning (which
+  PowerShell rendered as a scary error on every run) no longer fires on Windows.
+- Relative config paths (`./workspace`, audit/log/history files) now resolve
+  against the project root instead of the current working directory, so the
+  global `james` command never scatters state into whatever folder it's run from.
 - One-command setup: `install.sh` / `install.ps1` now end with the interactive
   setup wizard (skipped when an API key is already configured), so the full
   path from clone to a working assistant is a single command:

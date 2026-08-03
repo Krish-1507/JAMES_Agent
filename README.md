@@ -21,7 +21,7 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
 - Local encrypted conversation-history storage and JSON/Markdown export.
 - Named conversation sessions — start, switch, resume, and clear per-session
   chat history (in-loop commands: `/new`, `/sessions`, `/resume <name>`,
-  `/clear`, `/export`, or `python -m james --session <name>`).
+  `/clear`, `/export`, or `james --session <name>`).
 - Wake-word support: `WAKE_ENGINE=always` (continuous listen),
   `porcupine` (low-power Picovoice), or `none`.
 - A closed learning loop: skills forged in one session are re-surfaced when
@@ -50,14 +50,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 > wrapper is required when you launch it from cmd — running the bare
 > `irm ... | iex` in cmd silently does nothing.
 
-The installer clones JAMES, creates a virtualenv, installs everything, then
-launches the one-time setup wizard. **Paste your API key, press Enter** — JAMES
-detects the provider from the key format and writes a working `.env` for you.
-Then start chatting:
+The installer clones JAMES to a stable location, creates a virtualenv, installs
+everything (auto-downloading dependencies), adds the `james` command to your
+PATH, and creates desktop/start-menu shortcuts. It then launches the one-time
+setup wizard — **paste your API key, press Enter** — JAMES detects the provider
+from the key format and writes a working `.env` for you.
+
+**Open a new terminal**, then:
 
 ```bash
-source .venv/bin/activate      # Windows: .venv\Scripts\Activate.ps1
-python -m james --text
+james              # desktop app (default)
+james --text       # terminal CLI
+james --voice      # terminal voice mode
+james --setup      # re-run the wizard anytime
 ```
 
 ### Manual install
@@ -69,8 +74,8 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -e ".[ui,mcp]"
-python -m james --setup   # interactive wizard: paste key, pick voice, writes .env
-python -m james --text
+james --setup      # interactive wizard: paste key, pick voice, writes .env
+james --text
 ```
 
 `--setup` runs a quick wizard. In the express path you paste an API key and
@@ -93,7 +98,7 @@ VOICE_ENABLED=false
 Before enabling extra capabilities, run:
 
 ```bash
-python -m james doctor
+james doctor
 python -m pytest -q
 ```
 
@@ -114,7 +119,7 @@ TTS_PROVIDER=edge
   (most human, need their API key). Missing `edge-tts` falls back to
   `pyttsx3`, then text output — JAMES never fails to start.
 - **STT**: `whisper_local` (offline, recommended), `whisper_api`, or `google`.
-- Run `python -m james --voice` to force voice mode, `--text` for text only.
+- Run `james --voice` to force voice mode, `--text` for text only.
 
 ```bash
 pip install -e ".[voice]"   # installs whisper + edge-tts + pyttsx3 + pyaudio
@@ -177,7 +182,7 @@ extensions. There are two intentionally different extension models:
 Scaffold a valid, manifest-carrying plugin with:
 
 ```bash
-python -m james --new-tool hello
+james --new-tool hello
 ```
 
 Skills can be published to the local marketplace and reinstalled later.

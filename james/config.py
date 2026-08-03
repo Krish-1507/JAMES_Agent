@@ -82,6 +82,10 @@ def _load_tool_permissions() -> None:
 
 
 def _warn_env_permissions(env_path: Path) -> None:
+    # Windows has no POSIX file modes (chmod is a no-op and st_mode always
+    # reports 0666), so the permission check only makes sense on Unix.
+    if os.name == "nt":
+        return
     try:
         if hasattr(os, "getuid") and os.getuid() == 0:
             return
@@ -119,6 +123,19 @@ def _int(key: str, default: int) -> int:
         return int(_env(key, str(default)))
     except ValueError:
         return default
+
+
+def _path(key: str, default: str) -> Path:
+    """Resolve a path from env, anchoring relative values to PROJECT_ROOT.
+
+    This makes ``james`` work from any working directory: ``./workspace`` in
+    the config always means ``<project>/workspace``, never the current folder.
+    """
+    raw = _env(key, default)
+    p = Path(raw)
+    if p.is_absolute():
+        return p
+    return (PROJECT_ROOT / p).resolve()
 
 
 def _float(key: str, default: float) -> float:
@@ -194,7 +211,7 @@ class AssistantSettings:
     user_name: str = field(default_factory=lambda: _env("USER_NAME", "User"))
     wake_word: str = field(default_factory=lambda: _env("WAKE_WORD", "jarvis").lower())
     system_prompt: str = field(default_factory=lambda: _env("SYSTEM_PROMPT"))
-    workspace_dir: Path = field(default_factory=lambda: Path(_env("WORKSPACE_DIR", "./workspace")).resolve())
+    workspace_dir: Path = field(default_factory=lambda: _path("WORKSPACE_DIR", "./workspace"))
     log_level: str = field(default_factory=lambda: _env("LOG_LEVEL", "INFO").upper())
     confirm_dangerous_actions: bool = field(default_factory=lambda: _bool("CONFIRM_DANGEROUS_ACTIONS", True))
 
@@ -202,11 +219,11 @@ class AssistantSettings:
     # mode: "standard" (read-only + safe tools) or "full" (shell/delete/apps)
     mode: str = field(default_factory=lambda: _env("JAMES_MODE", "standard").lower())
     dry_run: bool = field(default_factory=lambda: _bool("DRY_RUN", False))
-    audit_log: Path = field(default_factory=lambda: Path(_env("AUDIT_LOG", "./workspace/james_audit.log")).resolve())
+    audit_log: Path = field(default_factory=lambda: _path("AUDIT_LOG", "./workspace/james_audit.log"))
 
     # Memory / RAG
     memory_enabled: bool = field(default_factory=lambda: _bool("MEMORY_ENABLED", True))
-    memory_file: Path = field(default_factory=lambda: Path(_env("MEMORY_FILE", "./workspace/memory.jsonl")).resolve())
+    memory_file: Path = field(default_factory=lambda: _path("MEMORY_FILE", "./workspace/memory.jsonl"))
     # Semantic memory uses sentence-transformers when installed; set to "false" to force keyword fallback.
     memory_embedding: bool = field(default_factory=lambda: _bool("MEMORY_EMBEDDING", True))
 
@@ -231,7 +248,7 @@ class AssistantSettings:
     # Privacy-certified local mode: block ALL non-loopback network egress and audit every attempt.
     offline_mode: bool = field(default_factory=lambda: _bool("OFFLINE_MODE", False))
     egress_audit_log: Path = field(
-        default_factory=lambda: Path(_env("EGRESS_AUDIT_LOG", "./workspace/james_egress.log")).resolve()
+        default_factory=lambda: _path("EGRESS_AUDIT_LOG", "./workspace/james_egress.log")
     )
 
     # Per-tool permission granularity: allow or deny specific tools by name.
@@ -246,9 +263,7 @@ class AssistantSettings:
     )
 
     history_file: Path = field(
-        default_factory=lambda: Path(
-            _env("CONVERSATION_HISTORY", "./workspace/conversation_history.enc")
-        ).resolve()
+        default_factory=lambda: _path("CONVERSATION_HISTORY", "./workspace/conversation_history.enc")
     )
     # Vision model for computer-use / image understanding (defaults to the main LLM model).
     vision_model: str = field(default_factory=lambda: _env("VISION_MODEL", ""))

@@ -12,7 +12,7 @@ python -m venv .venv
 # macOS/Linux: source .venv/bin/activate
 pip install -e ".[ui,mcp]"
 cp .env.example .env
-python -m james --check
+james --check
 python -m pytest -q
 ```
 

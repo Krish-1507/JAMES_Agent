@@ -47,7 +47,7 @@ The current constrained skill runtime is not a substitute for process isolation.
 
 ## Offline mode
 
-`OFFLINE_MODE=true` blocks non-loopback network egress. Use a local provider endpoint such as Ollama when enabling it. Verify the configuration with `python -m james doctor` before relying on offline operation.
+`OFFLINE_MODE=true` blocks non-loopback network egress. Use a local provider endpoint such as Ollama when enabling it. Verify the configuration with `james doctor` before relying on offline operation.
 
 ## Reporting a security issue
 

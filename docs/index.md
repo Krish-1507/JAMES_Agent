@@ -10,8 +10,9 @@ JAMES is an alpha-stage, desktop-first LLM assistant. It is designed for experim
 
 1. Install the project and copy `.env.example` to `.env`.
 2. Keep `JAMES_MODE=standard` and `CONFIRM_DANGEROUS_ACTIONS=true`.
-3. Run `python -m james --check`, then `python -m james doctor`.
-4. Start with `python -m james --text` and only enable tools you need.
+3. Run `james --check`, then `james doctor`.
+4. Start with `james --text` and only enable tools you need. `james` with no
+   arguments opens the desktop app.
 
 The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contains installation, provider, configuration, and roadmap guidance.
 

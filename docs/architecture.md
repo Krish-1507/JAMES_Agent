@@ -42,8 +42,8 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
 
 ## Configuration and startup
 
-Settings load from `.env` via `james.config.settings`. `python -m james --check`
-prints the effective configuration; `python -m james doctor` runs diagnostics.
+Settings load from `.env` via `james.config.settings`. `james --check`
+prints the effective configuration; `james doctor` runs diagnostics.
 On first run with no `.env`, an interactive onboarding wizard (`--setup`)
 configures the provider and safety defaults.
 
