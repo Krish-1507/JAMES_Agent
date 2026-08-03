@@ -246,7 +246,8 @@ class GeminiProvider(LLMProvider):
         timeout: int = 120,
     ):
         # Uses the current `google.genai` SDK (the older `google.generativeai`
-        # package is end-of-life as of 2026).
+        # package is end-of-life as of 2026). The client is built lazily because
+        # the SDK rejects an empty API key at construction time.
         from google import genai
         from google.genai import types as genai_types
 
@@ -255,11 +256,17 @@ class GeminiProvider(LLMProvider):
         self.max_tokens = max_tokens
         self._api_key = api_key
         self._types = genai_types
-        self._client = genai.Client(api_key=api_key)
+        self._genai = genai
+        self._client = None
 
     def validate(self) -> None:
         if not self._api_key:
             raise RuntimeError("Missing GEMINI_API_KEY.")
+
+    def _get_client(self):
+        if self._client is None:
+            self._client = self._genai.Client(api_key=self._api_key)
+        return self._client
 
     def _to_gemini_tools(self, tools: list[Tool]) -> list:
         T = self._types
@@ -324,7 +331,7 @@ class GeminiProvider(LLMProvider):
         if tools:
             config.tools = self._to_gemini_tools(tools)
 
-        resp = self._client.models.generate_content(
+        resp = self._get_client().models.generate_content(
             model=model or self.model,
             contents=self._to_gemini_contents(messages),
             config=config,

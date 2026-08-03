@@ -1,19 +1,20 @@
 """Small, cross-platform process broker for high-risk local operations.
 
-The broker uses Python's ``spawn`` context so risky work never executes in the
-desktop process. Payloads are JSON-like values and the child exposes only named
-operations; arbitrary callables or source code cannot cross the boundary.
+The broker executes each operation in a fresh interpreter subprocess so risky
+work never runs in the desktop process. Payloads are JSON-serializable values
+and the child exposes only named operations; arbitrary callables or source code
+cannot cross the boundary.
 """
 
 from __future__ import annotations
 
-import multiprocessing
+import json
 import os
 import shutil
 import subprocess  # nosec B404 - required to spawn isolated worker commands
+import sys
 import time
 from pathlib import Path
-from queue import Empty
 from typing import Any
 
 
@@ -124,28 +125,60 @@ def _execute(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     raise ValueError(f"Unknown isolated operation: {operation}")
 
 
-def _worker(operation: str, payload: dict[str, Any], output) -> None:
+def _worker_bootstrap() -> str:
+    """Python source for the isolated child: import the broker ops, run one op.
+
+    Kept as a string so the child has no access to the parent's process state;
+    it only executes a named operation against a JSON payload.
+    """
+    return r"""
+import json
+import sys
+
+from james.core.isolation import _execute, _limit_child
+
+
+def main() -> int:
+    request = json.loads(sys.argv[1])
+    _limit_child()
     try:
-        output.put(_execute(operation, payload))
+        result = _execute(request["operation"], request["payload"])
     except BaseException as exc:
-        output.put({"ok": False, "output": f"Isolated operation failed: {exc}"})
+        result = {"ok": False, "output": "Isolated operation failed: {0}".format(exc)}
+    print(json.dumps(result), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+"""
 
 
 def run_isolated(operation: str, payload: dict[str, Any], *, timeout: int = 120) -> dict[str, Any]:
-    """Execute a fixed broker operation in a spawned process with a hard timeout."""
-    context = multiprocessing.get_context("spawn")
-    output = context.Queue(maxsize=1)
-    process = context.Process(target=_worker, args=(operation, payload, output), daemon=True)
-    process.start()
-    process.join(max(1, timeout))
-    if process.is_alive():
-        process.terminate()
-        process.join(5)
-        return {"ok": False, "output": "Isolated operation timed out and was terminated."}
+    """Execute a fixed broker operation in a fresh interpreter with a hard timeout."""
+    request = json.dumps({"operation": operation, "payload": payload})
     try:
-        return output.get_nowait()
-    except Empty:
+        proc = subprocess.run(  # nosec B603 - argv list, shell=False, only named ops
+            [sys.executable, "-c", _worker_bootstrap(), request],
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=max(1, timeout),
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "output": "Isolated operation timed out and was terminated."}
+    output = (proc.stdout or "").strip()
+    if not output:
         return {
             "ok": False,
-            "output": f"Isolated worker exited without a result (code {process.exitcode}).",
+            "output": f"Isolated worker exited without a result (code {proc.returncode}).",
         }
+    try:
+        result = json.loads(output)
+    except json.JSONDecodeError:
+        return {
+            "ok": False,
+            "output": f"Isolated worker produced an invalid result (code {proc.returncode}).",
+        }
+    return result
