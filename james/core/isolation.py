@@ -27,9 +27,15 @@ def _limit_child() -> None:
 
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
-        # RLIMIT_NPROC is per user and counts threads already owned by the host.
-        # Keep a finite ceiling without dropping below normal CI/desktop usage.
-        resource.setrlimit(resource.RLIMIT_NPROC, (256, 256))
+        # RLIMIT_NPROC caps runaway forks but must stay above the host's current
+        # per-user process count, otherwise the worker's own nested subprocess
+        # fails with EAGAIN on busy runners (co-hosted CI jobs share one user).
+        try:
+            soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
+            target = min(max(soft, 4096), hard) if hard > 0 else max(soft, 4096)
+            resource.setrlimit(resource.RLIMIT_NPROC, (target, hard))
+        except (ValueError, OSError):
+            pass
         resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
     except (ImportError, OSError, ValueError):
         pass
