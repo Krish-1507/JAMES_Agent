@@ -92,10 +92,12 @@ class Agent:
         # Optional hooks for live UI / logging. Both receive a unique per-call
         # ``call_id`` so a "started" event can be matched to its "finished" event.
         self.on_tool_start = None  # on_tool_start(call_id, name, args)
+        self.on_tool_pending = None  # on_tool_pending(call_id, name, args)
         self.on_tool = None        # on_tool(call_id, name, args, result)
         self._tool_seq = 0
         self.system_prompt = system_prompt or build_system_prompt()
-        _ensure_confirm_thread()
+        if confirm is None:
+            _ensure_confirm_thread()
 
     def _annotate(self, resp: LLMResponse) -> dict:
         msg: dict = {"role": "assistant", "content": resp.content or ""}
@@ -168,16 +170,22 @@ class Agent:
                     saved_skill = True
                 self._tool_seq += 1
                 call_id = f"{id(self)}-{self._tool_seq}"
-                if self.on_tool_start:
-                    with suppress(Exception):
-                        self.on_tool_start(call_id, tc.name, tc.arguments)
                 if self.confirm_dangerous and is_dangerous_tool_call(tc.name, tc.arguments):
+                    if self.on_tool_pending:
+                        with suppress(Exception):
+                            self.on_tool_pending(call_id, tc.name, tc.arguments)
                     allowed = self.confirm(tc.name, tc.arguments)
                     if not allowed:
                         result_text = f"Action '{tc.name}' was denied by the user."
                     else:
+                        if self.on_tool_start:
+                            with suppress(Exception):
+                                self.on_tool_start(call_id, tc.name, tc.arguments)
                         result_text = self.registry.execute(tc.name, tc.arguments).output
                 else:
+                    if self.on_tool_start:
+                        with suppress(Exception):
+                            self.on_tool_start(call_id, tc.name, tc.arguments)
                     result_text = self.registry.execute(tc.name, tc.arguments).output
 
                 if self.on_tool:

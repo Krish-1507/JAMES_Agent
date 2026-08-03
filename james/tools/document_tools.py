@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..config import settings
+from ..core.workspace import resolve_workspace_path
 from .base import ToolResult, tool
 
 
 def _out(name: str) -> Path:
-    p = settings.assistant.workspace_dir / name
+    p = resolve_workspace_path(name, allow_root=False)
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 

@@ -11,13 +11,12 @@ manages itself.
 from __future__ import annotations
 
 import json
-import os
 import threading
 import time
 import uuid
-from pathlib import Path
 
 from ..config import settings
+from ..core.workspace import resolve_workspace_path, workspace_root
 from ..llm.base import LLMProvider
 from .base import ToolResult, tool
 
@@ -45,29 +44,11 @@ Begin now and keep working until the scope is fully organised.
 
 
 def _resolve_scope(scope: str) -> str:
-    """Resolve a short scope name ('desktop', 'documents', 'downloads', 'workspace',
-    'home', 'whole') to an absolute path, else treat the input as a literal path."""
+    """Resolve a scope while enforcing the configured workspace capability."""
     s = (scope or "").strip()
-    if not s:
-        return str(settings.assistant.workspace_dir)
-    low = s.lower()
-    home = Path.home()
-    named = {
-        "workspace": settings.assistant.workspace_dir,
-        "home": home,
-        "user": home,
-        "desktop": home / "Desktop",
-        "documents": home / "Documents",
-        "downloads": home / "Downloads",
-        "pictures": home / "Pictures",
-        "videos": home / "Videos",
-        "music": home / "Music",
-        "whole": Path(os.path.splitdrive(str(home))[0] + os.sep) if os.path.splitdrive(str(home))[1] else home,
-    }
-    if low in named:
-        return str(named[low])
-    p = Path(s).expanduser()
-    return str(p.resolve() if p.exists() else p)
+    if not s or s.lower() == "workspace":
+        return str(workspace_root())
+    return str(resolve_workspace_path(s))
 
 
 class FileManager:

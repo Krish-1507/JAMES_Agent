@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ...config import settings
+from ...sdk.signing import verify_plugin_signature
 from ..base import ToolResult, tool
 
 _MARKETPLACE_FILE = Path(__file__).resolve().parents[2] / "marketplace.json"
@@ -75,6 +77,94 @@ def _save_catalog(catalog: list[dict[str, Any]]) -> None:
     )
 
 
+def _trusted_plugin_keys() -> dict[str, Path]:
+    trust_dir = settings.assistant.workspace_dir / "trusted_plugin_keys"
+    if not trust_dir.is_dir():
+        return {}
+    return {path.stem: path for path in trust_dir.glob("*.pem") if path.is_file()}
+
+
+def _sign_local_plugin(source: str, name: str, description: str) -> str:
+    """Sign locally published skills and enroll only their public key."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from ...sdk.manifest import PluginManifest, format_manifest, parse_manifest
+    from ...sdk.signing import sign_plugin_source
+    from ..forge_tools import _GENERATED_SKILL_HEADER
+
+    private_path = settings.assistant.workspace_dir / ".james_plugin_signing.key"
+    trust_dir = settings.assistant.workspace_dir / "trusted_plugin_keys"
+    public_path = trust_dir / "local-workspace.pem"
+    if private_path.exists():
+        private_pem = private_path.read_bytes()
+        private_key = serialization.load_pem_private_key(private_pem, password=None)
+    else:
+        private_key = Ed25519PrivateKey.generate()
+        private_pem = private_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        private_path.write_bytes(private_pem)
+    trust_dir.mkdir(parents=True, exist_ok=True)
+    public_path.write_bytes(
+        private_key.public_key().public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+    )
+    if parse_manifest(source) is None:
+        manifest = PluginManifest(
+            name=name,
+            description=description,
+            tags=["skill"],
+        )
+        source = (
+            _GENERATED_SKILL_HEADER
+            + format_manifest(manifest)
+            + source[len(_GENERATED_SKILL_HEADER) :]
+        )
+    return sign_plugin_source(source, private_pem, "local-workspace")
+
+
+def _dependency_name(spec: str) -> str:
+    for marker in ("==", ">=", "<=", "~=", ">", "<"):
+        if marker in spec:
+            return spec.split(marker, 1)[0]
+    return spec
+
+
+def _resolve_dependencies(
+    name: str, catalog: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], str]:
+    by_name = {str(plugin.get("name")): plugin for plugin in catalog}
+    ordered: list[dict[str, Any]] = []
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(plugin_name: str) -> None:
+        if plugin_name in visited:
+            return
+        if plugin_name in visiting:
+            raise ValueError(f"Plugin dependency cycle includes '{plugin_name}'.")
+        plugin = by_name.get(plugin_name)
+        if plugin is None:
+            raise ValueError(f"Missing plugin dependency '{plugin_name}'.")
+        visiting.add(plugin_name)
+        for dependency in plugin.get("dependencies", []):
+            visit(_dependency_name(str(dependency)))
+        visiting.remove(plugin_name)
+        visited.add(plugin_name)
+        ordered.append(plugin)
+
+    try:
+        visit(name)
+    except ValueError as exc:
+        return [], str(exc)
+    return ordered, ""
+
+
 @tool(
     "search_plugins",
     "Search the plugin marketplace catalog for available community plugins.",
@@ -129,21 +219,31 @@ def _install_plugin(name: str) -> dict[str, Any]:
     from ..forge_tools import _persist_skill
 
     catalog = _load_catalog()
-    plugin = next((p for p in catalog if p.get("name") == name), None)
-    if plugin is None:
-        return {"ok": False, "error": f"Plugin '{name}' not found in marketplace."}
-    code = plugin.get("code")
-    if not code:
-        return {
-            "ok": False,
-            "error": f"Plugin '{name}' has no bundled code and cannot be installed "
-            "from the marketplace yet.",
-        }
-    description = plugin.get("description", "")
-    result = _persist_skill(name, code, description)
-    if not result.ok:
-        return {"ok": False, "error": result.output}
-    return {"ok": True, "plugin": plugin, "message": f"Plugin '{name}' installed."}
+    resolved, error = _resolve_dependencies(name, catalog)
+    if error:
+        return {"ok": False, "error": error}
+    installed: list[str] = []
+    trust = _trusted_plugin_keys()
+    for plugin in resolved:
+        plugin_name = str(plugin.get("name"))
+        code = plugin.get("code")
+        if not code:
+            return {
+                "ok": False,
+                "error": f"Plugin '{plugin_name}' has no bundled code and cannot be installed.",
+            }
+        verified, reason = verify_plugin_signature(str(code), trust)
+        if not verified:
+            return {"ok": False, "error": f"Plugin '{plugin_name}' rejected: {reason}"}
+        result = _persist_skill(plugin_name, str(code), str(plugin.get("description", "")))
+        if not result.ok:
+            return {"ok": False, "error": result.output}
+        installed.append(plugin_name)
+    return {
+        "ok": True,
+        "plugin": resolved[-1],
+        "message": f"Installed signed plugin chain: {', '.join(installed)}.",
+    }
 
 
 def _bundle_skill(name: str, description: str = "") -> dict[str, Any]:
@@ -169,8 +269,10 @@ def _bundle_skill(name: str, description: str = "") -> dict[str, Any]:
         return {"ok": False, "error": f"Could not load skill: {exc}"}
     if not tools:
         return {"ok": False, "error": "No @tool found in the skill."}
-    manifest = parse_manifest(source)
     tool_desc = description or tools[0].description or ""
+    source = _sign_local_plugin(source, name, tool_desc)
+    manifest = parse_manifest(source)
+    assert manifest is not None
     return {
         "ok": True,
         "plugin": {
@@ -180,6 +282,7 @@ def _bundle_skill(name: str, description: str = "") -> dict[str, Any]:
             "version": manifest.version if manifest else "1.0.0",
             "tags": list(manifest.tags) if manifest and manifest.tags else ["skill"],
             "source": "local",
+            "dependencies": list(manifest.dependencies) if manifest else [],
             "code": source,
             "installed": True,
             "added": datetime.now().isoformat(timespec="seconds"),

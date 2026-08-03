@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import threading
 import time
 from dataclasses import asdict, dataclass
@@ -12,6 +11,8 @@ from pathlib import Path
 
 from ..config import settings
 from .command_policy import is_safe_command, parse_safe_command
+from .isolation import run_isolated
+from .workspace import workspace_root
 
 
 def _notify(title: str, message: str) -> None:
@@ -98,17 +99,13 @@ class Scheduler:
             if args is None:
                 _notify("Scheduled task blocked", reason)
                 return
-            try:
-                subprocess.run(
-                    args,
-                    shell=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                    check=False,
-                )
-            except Exception as exc:
-                _notify("Scheduled task failed", str(exc))
+            result = run_isolated(
+                "command",
+                {"args": args, "timeout": 120, "workspace": str(workspace_root())},
+                timeout=125,
+            )
+            if not result.get("ok"):
+                _notify("Scheduled task failed", str(result.get("output", "Unknown error")))
 
     def _run_loop(self) -> None:
         while not self._stop.is_set():

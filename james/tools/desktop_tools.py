@@ -6,6 +6,7 @@ screenshot -> describe -> act loop using a vision model (local-friendly).
 """
 from __future__ import annotations
 
+from ..core.workspace import resolve_workspace_path
 from .base import ToolResult, tool
 
 _context = {"llm": None}
@@ -46,13 +47,9 @@ def computer_use(instruction: str, max_steps: int = 12) -> ToolResult:
     {"path": {"type": "string", "description": "Destination PNG path (default workspace/screenshot.png)."}},
 )
 def screenshot_save(path: str = "") -> ToolResult:
-    from pathlib import Path
-
     import pyautogui
 
-    from ..config import settings
-
-    dest = Path(path) if path else settings.assistant.workspace_dir / "screenshot.png"
+    dest = resolve_workspace_path(path or "screenshot.png", allow_root=False)
     try:
         img = pyautogui.screenshot()
         dest.parent.mkdir(parents=True, exist_ok=True)

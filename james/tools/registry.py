@@ -59,6 +59,7 @@ from .file_tools import (
     move_file,
     read_file,
     rename_file,
+    restore_last_deleted,
     search_files,
     write_file,
 )
@@ -66,12 +67,12 @@ from .forge_tools import (
     _GENERATED_SKILL_HEADER,
     forget_skill,
     list_skills,
-    load_generated_skill,
     save_skill,
 )
 from .marketplace import install_plugin, list_plugins, publish_skill, search_plugins
 from .mcp_tools import discover_mcp_tools
 from .memory_tools import recall, remember
+from .plugin_proxy import discover_plugin_tools
 from .research_tools import learn_skill, research
 from .scheduler_tools import cancel_task, list_scheduled, schedule_task
 from .system_tools import (
@@ -116,7 +117,7 @@ ALL_TOOLS: list[Tool] = [
     run_shell_command, open_application, take_screenshot, upload_image,
     get_system_info, control_media, clipboard,
     computer_use, click_at, type_text, press_key, screenshot_save,
-    create_directory, copy_file, move_file, rename_file, directory_tree,
+    create_directory, copy_file, move_file, rename_file, restore_last_deleted, directory_tree,
     research, learn_skill,
     background_task, list_background_tasks, get_background_result,
     manage_files, list_file_manager_tasks, stop_file_manager,
@@ -137,6 +138,9 @@ DANGEROUS_TOOLS = {
     "rename_file",
     "manage_files",
     "save_skill",
+    "forget_skill",
+    "install_plugin",
+    "publish_skill",
 }
 
 
@@ -177,16 +181,13 @@ def _discover_external_plugins(registry: ToolRegistry) -> None:
         try:
             source = path.read_text(encoding="utf-8")
             if source.startswith(_GENERATED_SKILL_HEADER):
-                module = load_generated_skill(path)
+                for plugin_tool in discover_plugin_tools(path, trusted=False):
+                    registry.register(plugin_tool)
             elif settings.assistant.external_plugins_enabled:
-                spec = importlib.util.spec_from_file_location(path.stem, str(path))
-                if spec is None or spec.loader is None:
-                    continue
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
+                for plugin_tool in discover_plugin_tools(path, trusted=True):
+                    registry.register(plugin_tool)
             else:
                 continue
-            _register_module(registry, module)
         except Exception as exc:
             print(f"[plugins] failed to load {path.name}: {exc}")
 

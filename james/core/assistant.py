@@ -103,14 +103,18 @@ def get_logger() -> logging.Logger:
 
 
 class Assistant:
-    def __init__(self, session: str | None = None):
+    def __init__(self, session: str | None = None, confirm=None):
         self.log = get_logger()
         self.settings = settings
         if settings.assistant.offline_mode:
             install_offline_guard()  # enforce privacy-certified local mode
         self.registry = ToolRegistry()
         self.llm = build_provider(settings.llm)
-        self.agent = Agent(self.llm, self.registry)
+        self._confirmation_handler = confirm
+        self._tool_hook = None
+        self._tool_start_hook = None
+        self._tool_pending_hook = None
+        self.agent = Agent(self.llm, self.registry, confirm=confirm)
         self.cli = create_cli()
         self.stt = build_stt(settings.voice)
         self.tts = build_tts(settings.voice)
@@ -151,11 +155,21 @@ class Assistant:
             {"type": "tool", "call_id": call_id, "name": name, "args": args, "result": result, "ok": ok}
         )
 
-    def set_tool_hooks(self, on_tool=None, on_tool_start=None) -> None:
+    def set_tool_hooks(self, on_tool=None, on_tool_start=None, on_tool_pending=None) -> None:
         """Let the GUI replace the default console hooks (and propagate to delegates)."""
+        self._tool_hook = on_tool
+        self._tool_start_hook = on_tool_start
+        self._tool_pending_hook = on_tool_pending
         self.agent.on_tool = on_tool
         self.agent.on_tool_start = on_tool_start
+        self.agent.on_tool_pending = on_tool_pending
         configure_delegate(self.llm, on_tool=on_tool, on_tool_start=on_tool_start)
+
+    def set_confirmation_handler(self, confirm=None) -> None:
+        """Persist a confirmation handler across live model switches."""
+        self._confirmation_handler = confirm
+        if confirm is not None:
+            self.agent.confirm = confirm
 
     def switch_model(self, provider: str, model: str) -> bool:
         """Rebuild the live LLM provider + agent for a new provider/model.
@@ -178,8 +192,15 @@ class Assistant:
             settings.llm.provider, settings.llm.model = prev_provider, prev_model
             self.log.exception("Failed to build provider for %s/%s", provider, model)
             return False
-        self.agent = Agent(self.llm, self.registry)
-        configure_delegate(self.llm, on_tool=self._on_tool, on_tool_start=self._on_tool_start)
+        self.agent = Agent(self.llm, self.registry, confirm=self._confirmation_handler)
+        self.agent.on_tool = self._tool_hook
+        self.agent.on_tool_start = self._tool_start_hook
+        self.agent.on_tool_pending = self._tool_pending_hook
+        configure_delegate(
+            self.llm,
+            on_tool=self._tool_hook or self._on_tool,
+            on_tool_start=self._tool_start_hook or self._on_tool_start,
+        )
         configure_computer_use(self.llm)
         configure_research(self.llm)
         configure_background(self.llm)

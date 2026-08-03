@@ -120,3 +120,31 @@ Set `ENABLE_TRUSTED_EXTERNAL_PLUGINS=true`, drop a normal `.py` file in
 can. Only enable it for source you have reviewed.
 
 See [the security model](security.md) for the boundary between the two tiers.
+
+## Signatures and dependencies
+
+Marketplace-installable code must carry an Ed25519 signature and content digest.
+Dependencies use plugin names with optional semantic constraints:
+
+```text
+# manifest-dependencies: shared_utils>=1.2.0,calendar_core==2.0.0
+# manifest-signing-key-id: team-release
+# manifest-content-sha256: <64 lowercase hex characters>
+# manifest-signature: <base64 Ed25519 signature>
+```
+
+Use the SDK helpers to sign and verify bundles:
+
+```python
+from james.sdk import sign_plugin_source, verify_plugin_signature
+
+signed = sign_plugin_source(source, private_key_pem, "team-release")
+ok, reason = verify_plugin_signature(signed, {"team-release": public_key_pem})
+```
+
+Install trusted public keys as
+`WORKSPACE_DIR/trusted_plugin_keys/<key-id>.pem`. The marketplace resolves the
+full dependency chain and rejects missing dependencies, cycles, unsigned code,
+unknown keys, digest mismatches, and invalid signatures. Locally published
+skills are signed automatically with a workspace-local key whose public half is
+enrolled in the same trust directory.

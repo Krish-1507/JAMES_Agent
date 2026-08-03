@@ -5,7 +5,7 @@ PyQt5 is an optional dependency; importing the package must not require it.
 
 
 def run_ui(*args, **kwargs):
-    from .orb import run_ui as _run_ui
+    from .desktop import run_ui as _run_ui
 
     return _run_ui(*args, **kwargs)
 

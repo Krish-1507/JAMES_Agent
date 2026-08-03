@@ -5,10 +5,10 @@ import base64
 import re
 import subprocess
 import webbrowser
-from pathlib import Path
 
-from ..config import settings
 from ..core.command_policy import is_safe_command, parse_safe_command
+from ..core.isolation import run_isolated
+from ..core.workspace import resolve_workspace_path, workspace_root
 from .base import ToolResult, tool
 
 _SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
@@ -34,16 +34,12 @@ def run_shell_command(command: str, timeout: int = 60) -> ToolResult:
     args, reason = parse_safe_command(command)
     if args is None:
         return ToolResult(ok=False, output=f"Command blocked: {reason}")
-    try:
-        proc = subprocess.run(
-            args, shell=False, capture_output=True, text=True, timeout=timeout
-        )
-        out = (proc.stdout or "") + (proc.stderr or "")
-        return ToolResult(ok=proc.returncode == 0, output=out[:8000])
-    except subprocess.TimeoutExpired:
-        return ToolResult(ok=False, output="Command timed out.")
-    except Exception as exc:
-        return ToolResult(ok=False, output=f"Error: {exc}")
+    result = run_isolated(
+        "command",
+        {"args": args, "timeout": timeout, "workspace": str(workspace_root())},
+        timeout=timeout + 5,
+    )
+    return ToolResult(ok=bool(result.get("ok")), output=str(result.get("output", "Command failed.")))
 
 
 @tool(
@@ -76,7 +72,7 @@ def take_screenshot(filename: str = "screenshot.png") -> ToolResult:
     try:
         import pyautogui
 
-        p = settings.assistant.workspace_dir / filename
+        p = resolve_workspace_path(filename, allow_root=False)
         pyautogui.screenshot(str(p))
         return ToolResult(ok=True, output=f"Screenshot saved to {p}")
     except Exception as exc:
@@ -168,7 +164,7 @@ def clipboard(text: str = "") -> ToolResult:
 )
 def upload_image(path: str, description: str = "") -> ToolResult:
     try:
-        p = Path(path)
+        p = resolve_workspace_path(path, allow_root=False)
         if not p.exists():
             return ToolResult(ok=False, output=f"File not found: {path}")
         if p.stat().st_size > 10_000_000:

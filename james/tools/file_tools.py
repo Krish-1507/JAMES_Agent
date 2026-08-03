@@ -1,17 +1,21 @@
 """File-system tools: read, write, search and explore the user's files."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ..config import settings
+from ..core.isolation import run_isolated
+from ..core.workspace import resolve_workspace_path, workspace_root
 from .base import ToolResult, tool
 
 
 def _resolve(path: str) -> Path:
-    p = Path(path).expanduser()
-    if not p.is_absolute():
-        p = settings.assistant.workspace_dir / p
-    return p
+    return resolve_workspace_path(path)
+
+
+def _trash_receipt() -> Path:
+    return workspace_root() / ".james_trash" / "last.json"
 
 
 @tool(
@@ -105,14 +109,48 @@ def search_files(pattern: str, path: str = "") -> ToolResult:
     required=["path"],
 )
 def delete_file(path: str) -> ToolResult:
-    p = _resolve(path)
-    if not p.exists():
-        return ToolResult(ok=False, output="Path does not exist.")
-    if p.is_dir():
-        p.rmdir()
-    else:
-        p.unlink()
-    return ToolResult(ok=True, output=f"Deleted {p}")
+    p = resolve_workspace_path(path, allow_root=False)
+    receipt = _trash_receipt()
+    result = run_isolated(
+        "trash",
+        {"workspace": str(workspace_root()), "path": str(p), "trash": str(receipt.parent)},
+        timeout=30,
+    )
+    if result.get("ok") and result.get("data"):
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text(json.dumps(result["data"], indent=2), encoding="utf-8")
+    return ToolResult(
+        ok=bool(result.get("ok")),
+        output=str(result.get("output", "Delete operation failed.")),
+        data=result.get("data"),
+    )
+
+
+@tool(
+    "restore_last_deleted",
+    "Restore the most recent item moved to JAMES' recoverable workspace trash.",
+    {},
+)
+def restore_last_deleted() -> ToolResult:
+    receipt = _trash_receipt()
+    if not receipt.exists():
+        return ToolResult(ok=False, output="There is no recent deleted item to restore.")
+    try:
+        record = json.loads(receipt.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return ToolResult(ok=False, output=f"Recovery record is unreadable: {exc}")
+    result = run_isolated(
+        "restore",
+        {
+            "workspace": str(workspace_root()),
+            "trashed": record["trashed"],
+            "original": record["original"],
+        },
+        timeout=30,
+    )
+    if result.get("ok"):
+        receipt.unlink(missing_ok=True)
+    return ToolResult(ok=bool(result.get("ok")), output=str(result.get("output", "Restore failed.")))
 
 
 @tool(

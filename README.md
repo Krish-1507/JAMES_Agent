@@ -163,7 +163,10 @@ ENABLE_TRUSTED_EXTERNAL_PLUGINS=false
 ```
 
 - Dangerous calls require confirmation; non-interactive contexts deny them by default.
+- The desktop shows a deny-by-default approval dialog with redacted arguments for every dangerous call.
 - `run_shell_command` and scheduled commands use a small read-only command policy. Arbitrary interpreter flags and mutating utilities are rejected.
+- Agent-controlled paths are bounded to `WORKSPACE_DIR`; deletion uses recoverable workspace trash.
+- Shell, scheduled command, deletion, and plugin execution runs in spawned workers with timeouts.
 - Audit entries are HMAC-signed with a random per-workspace key, created on first use. Set `JAMES_AUDIT_HMAC_KEY` to manage the key yourself.
 - Conversation history uses authenticated Fernet encryption with a random per-workspace key. Set `JAMES_HISTORY_KEY` to manage that key yourself.
 - TTS playback never invokes a shell, and audio files use secure temporary-file creation.
@@ -173,9 +176,7 @@ Read the complete security guidance in [docs/security.md](docs/security.md).
 
 ### Important limitations
 
-JAMES is **not** a hardened OS sandbox. Treat LLM output, MCP servers, and third-party software as untrusted. The project does not yet provide container/VM isolation, enterprise policy management, or a signed-plugin marketplace.
-
-The GUI currently fails closed for dangerous actions unless it is given an explicit confirmation handler. This is intentional while the dedicated GUI approval flow is being built.
+JAMES is **not** a hardened OS sandbox. Spawned workers reduce blast radius but are not containers or virtual machines. Treat LLM output, MCP servers, and third-party software as untrusted; enterprise policy management remains future work.
 
 ## Tools and capabilities
 
@@ -263,28 +264,19 @@ JAMES is in **alpha** and should not be treated as production software yet.
 Before it is recommended for general users, the following gaps remain open:
 
 ### Safety (highest priority)
-- [ ] **Explicit GUI approval prompts for dangerous calls.** The desktop app
-      currently fails closed for dangerous actions because it has no dedicated
-      confirmation handler; the terminal CLI prompts, but the GUI does not.
-      ([docs/security.md](docs/security.md))
-- [ ] **Process/container isolation for high-risk tool execution.** Shell
-      commands, file deletion, scheduled commands, and trusted plugins run
-      in-process today.
-- [ ] **Workspace-scoped filesystem permissions.** The agent can currently
-      reach outside its bounded workspace.
+- [x] **Explicit GUI approval prompts for dangerous calls.** One-time approvals are deny-by-default and redact sensitive arguments.
+- [x] **Process isolation for high-risk tool execution.** Shell, scheduled command, recoverable deletion, and plugin calls use spawned workers with hard timeouts. Container/VM isolation remains optional future defense in depth.
+- [x] **Workspace-scoped filesystem permissions.** Canonical path checks reject traversal, absolute escapes, and symlink escapes.
 
 ### Release engineering
-- [ ] **Signed releases and CI across Windows, macOS, and Linux.** CI runs on
-  Windows and Linux today; add macOS, release automation, and signed artifacts.
-- [ ] **Dependency/security scanning.** No SCA/SAST pipeline is wired in yet.
+- [x] **Signed release artifacts.** Tag builds are signed through Sigstore using GitHub OIDC and attached to releases. CI currently covers Windows and Linux; macOS coverage remains planned.
+- [x] **Dependency/security scanning.** `pip-audit`, Bandit, and CodeQL run in the security workflow.
 
 ### Plugin & marketplace trust
-- [ ] **Plugin signing + dependency metadata.** The SDK manifest is in place;
-  cryptographic signing and dependency resolution are not.
+- [x] **Plugin signing + dependency metadata.** Manifests support Ed25519 signatures, content digests, key IDs, dependencies, and cycle/missing-dependency rejection.
 
 ### Usability & recovery
-- [ ] **Guided onboarding and clearer recovery/undo behavior.** There is no
-  guided recovery flow for mistakes or destructive actions.
+- [x] **Guided onboarding and clearer recovery/undo behavior.** Desktop empty states guide setup, and recoverable deletion includes a dedicated Recovery view.
 
 The near-term product focus is a trustworthy desktop workflow: organize a bounded workspace, summarize local documents, and produce a reviewable result—with the user in control throughout.
 

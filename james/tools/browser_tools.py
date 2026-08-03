@@ -8,6 +8,7 @@ from __future__ import annotations
 from contextlib import suppress
 
 from ..config import settings
+from ..core.workspace import resolve_workspace_path
 from .base import ToolResult, tool
 
 _browser = None
@@ -151,7 +152,7 @@ def browser_extract(selector: str = "") -> ToolResult:
 def browser_screenshot(filename: str = "page.png") -> ToolResult:
     try:
         page = _get_page()
-        p = settings.assistant.workspace_dir / filename
+        p = resolve_workspace_path(filename, allow_root=False)
         page.screenshot(path=str(p))
         return ToolResult(ok=True, output=f"Screenshot saved to {p}")
     except Exception as exc:

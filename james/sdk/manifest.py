@@ -15,6 +15,7 @@ MANIFEST_PREFIX = "# manifest-"
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
+_DEPENDENCY_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*(?:(?:==|>=|<=|~=|>|<)\d+\.\d+\.\d+)?$")
 
 @dataclass
 class PluginManifest:
@@ -25,6 +26,10 @@ class PluginManifest:
     author: str = "JAMES Community"
     description: str = ""
     tags: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
+    signing_key_id: str = ""
+    content_sha256: str = ""
+    signature: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -33,6 +38,10 @@ class PluginManifest:
             "author": self.author,
             "description": self.description,
             "tags": list(self.tags),
+            "dependencies": list(self.dependencies),
+            "signing_key_id": self.signing_key_id,
+            "content_sha256": self.content_sha256,
+            "signature": self.signature,
         }
 
 
@@ -49,8 +58,15 @@ def validate_manifest(manifest: PluginManifest) -> list[str]:
         issues.append("author must not be empty")
     if not isinstance(manifest.tags, list) or not all(isinstance(t, str) for t in manifest.tags):
         issues.append("tags must be a list of strings")
+    if not isinstance(manifest.dependencies, list) or not all(
+        isinstance(dep, str) and _DEPENDENCY_RE.match(dep) for dep in manifest.dependencies
+    ):
+        issues.append("dependencies must be plugin names with optional semantic version constraints")
+    if manifest.content_sha256 and not re.fullmatch(r"[0-9a-f]{64}", manifest.content_sha256):
+        issues.append("content_sha256 must be a lowercase SHA-256 digest")
+    if bool(manifest.signature) != bool(manifest.signing_key_id):
+        issues.append("signature and signing_key_id must be provided together")
     return issues
-
 
 def format_manifest(manifest: PluginManifest) -> str:
     """Render a manifest as the comment block written into a plugin file."""
@@ -61,6 +77,14 @@ def format_manifest(manifest: PluginManifest) -> str:
         lines.append(f"{MANIFEST_PREFIX}description: {manifest.description}")
     if manifest.tags:
         lines.append(f"{MANIFEST_PREFIX}tags: {','.join(manifest.tags)}")
+    if manifest.dependencies:
+        lines.append(f"{MANIFEST_PREFIX}dependencies: {','.join(manifest.dependencies)}")
+    if manifest.signing_key_id:
+        lines.append(f"{MANIFEST_PREFIX}signing-key-id: {manifest.signing_key_id}")
+    if manifest.content_sha256:
+        lines.append(f"{MANIFEST_PREFIX}content-sha256: {manifest.content_sha256}")
+    if manifest.signature:
+        lines.append(f"{MANIFEST_PREFIX}signature: {manifest.signature}")
     return "\n".join(lines) + "\n"
 
 
@@ -75,10 +99,15 @@ def parse_manifest(source: str) -> PluginManifest | None:
     if not fields:
         return None
     tags = [t.strip() for t in fields.get("tags", "").split(",") if t.strip()]
+    dependencies = [d.strip() for d in fields.get("dependencies", "").split(",") if d.strip()]
     return PluginManifest(
         name=fields.get("name", ""),
         version=fields.get("version", "1.0.0"),
         author=fields.get("author", "JAMES Community"),
         description=fields.get("description", ""),
         tags=tags,
+        dependencies=dependencies,
+        signing_key_id=fields.get("signing-key-id", ""),
+        content_sha256=fields.get("content-sha256", ""),
+        signature=fields.get("signature", ""),
     )

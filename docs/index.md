@@ -29,11 +29,7 @@ JAMES currently supports LLM tool calling, local files and documents, configured
 
 ### Promotion readiness
 
-JAMES is **alpha**. Before recommending it to general users the project still needs:
-explicit GUI approval prompts for dangerous calls, process/container isolation
-for high-risk tool execution, workspace-scoped filesystem permissions, signed
-releases with CI across Windows/macOS/Linux, plugin signing, and a guided
-recovery/undo flow. See the [README roadmap](https://github.com/Krish-1507/JAMES_Agent#roadmap-to-v1).
+JAMES is **alpha**. The current hardening baseline includes explicit desktop approvals, workspace-scoped paths, spawned-process workers for high-risk tools and plugins, signed plugin metadata, recoverable deletion, SCA/SAST, and OIDC-signed release artifacts. Remaining promotion work is tracked in the [README roadmap](https://github.com/Krish-1507/JAMES_Agent#roadmap-to-v1).
 
 ## Interfaces and model selection
 

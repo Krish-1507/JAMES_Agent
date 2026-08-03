@@ -28,15 +28,21 @@ JAMES does not use a command shell for TTS playback, scheduled commands, or the 
 
 `run_shell_command` and scheduled commands share a restrictive policy that permits only selected read-only tools. Dynamic interpreter execution, command chaining, shell metacharacters, and mutating utility modes are rejected.
 
+Shell commands, scheduled commands, recoverable deletion, and plugin tool calls execute in spawned worker processes with hard timeouts. POSIX workers also receive conservative resource limits. This is process isolation and defense in depth; it is not a container or VM boundary.
+
+All agent-controlled file paths are canonicalized against `WORKSPACE_DIR`. Absolute paths are accepted only when they resolve inside that workspace; parent traversal and symlink escapes are rejected. Deletion moves items to `.james_trash` for recovery rather than permanently unlinking them.
+
+The desktop app supplies a dedicated confirmation handler. Dangerous actions show a deny-by-default modal with redacted arguments and one-time approval; closing or timing out denies the call.
+
 This policy is defense in depth; use `standard` mode and `ALLOWED_TOOLS` when possible.
 
 ## Plugins and generated skills
 
 Generated Skill Forge code is not treated as a normal Python plugin. It is parsed and constrained before writing and every time it is loaded. It cannot use imports other than JAMES metadata imports, attributes, reflection, loops, classes, or dynamic execution.
 
-Ordinary Python files in `./plugins/` are trusted code and can run arbitrary code. JAMES does not load them unless `ENABLE_TRUSTED_EXTERNAL_PLUGINS=true` is set. Review source code before enabling that setting.
+Plugin manifests support dependency declarations, SHA-256 content digests, key IDs, and Ed25519 signatures. Marketplace installation resolves the dependency chain and rejects unsigned, tampered, cyclic, missing, or untrusted bundles. Trusted public keys live in `WORKSPACE_DIR/trusted_plugin_keys/<key-id>.pem`.
 
-The current constrained skill runtime is not a substitute for process isolation. Future releases should run high-risk extension code in a separate, capability-limited process or container.
+Ordinary Python files in `./plugins/` remain disabled unless `ENABLE_TRUSTED_EXTERNAL_PLUGINS=true`; when enabled they must be signed by a trusted key. Plugin decorators are inspected without importing code in the desktop process, and tool execution is delegated to a spawned worker.
 
 ## Secrets, history, and audit logs
 

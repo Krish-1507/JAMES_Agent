@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import importlib.util
 import os
 import re
 import tempfile
@@ -291,8 +290,11 @@ def _persist_skill(name: str, code: str, description: str = "") -> ToolResult:
 
     reg = _registry.get("reg")
     loaded: list[str] = []
-    for registered_tool in tools:
-        if description and registered_tool is tools[0]:
+    from .plugin_proxy import discover_plugin_tools
+
+    isolated_tools = discover_plugin_tools(path, trusted=False)
+    for registered_tool in isolated_tools:
+        if description and registered_tool is isolated_tools[0]:
             registered_tool.description = description
         if reg is not None:
             reg.register(registered_tool)
@@ -328,16 +330,14 @@ def list_skills() -> ToolResult:
         try:
             source = path.read_text(encoding="utf-8")
             if source.startswith(_GENERATED_SKILL_HEADER):
-                module = load_generated_skill(path)
+                trusted = False
             elif settings.assistant.external_plugins_enabled:
-                spec = importlib.util.spec_from_file_location(f"trusted_{path.stem}", str(path))
-                if spec is None or spec.loader is None:
-                    continue
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
+                trusted = True
             else:
                 continue
-            for registered_tool in _find_tools(module):
+            from .plugin_proxy import discover_plugin_tools
+
+            for registered_tool in discover_plugin_tools(path, trusted=trusted):
                 names.append(f"{registered_tool.name}: {registered_tool.description[:60]}")
         except Exception:
             continue
@@ -362,7 +362,15 @@ def forget_skill(name: str) -> ToolResult:
         if reg is not None:
             reg._tools.pop(tool_name, None)
     _skill_tools.pop(fname, None)
-    path.unlink()
+    from ..core.isolation import run_isolated
+
+    removed = run_isolated(
+        "plugin_delete",
+        {"plugin_root": str(_PLUGINS_DIR), "path": str(path)},
+        timeout=30,
+    )
+    if not removed.get("ok"):
+        return ToolResult(ok=False, output=str(removed.get("output", "Could not remove skill.")))
     return ToolResult(ok=True, output=f"Forgot skill '{fname}'.")
 
 

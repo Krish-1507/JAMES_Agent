@@ -31,6 +31,12 @@ from .manifest import (
     parse_manifest,
     validate_manifest,
 )
+from .signing import (
+    canonical_plugin_bytes,
+    plugin_digest,
+    sign_plugin_source,
+    verify_plugin_signature,
+)
 
 GENERATED_HEADER = "# JAMES-GENERATED-SKILL v1\n"
 
@@ -41,13 +47,17 @@ __all__ = [
     "PluginManifest",
     "Tool",
     "ToolResult",
+    "canonical_plugin_bytes",
     "create_plugin",
     "format_manifest",
     "load_plugin",
     "parse_manifest",
+    "plugin_digest",
+    "sign_plugin_source",
     "tool",
     "validate_manifest",
     "validate_plugin",
+    "verify_plugin_signature",
 ]
 
 # Kept in sync with james.tools.forge_tools so plugins can be authored with one
@@ -108,6 +118,7 @@ def create_plugin(
     version: str = "1.0.0",
     tags: list[str] | None = None,
     directory: str | Path | None = None,
+    dependencies: list[str] | None = None,
     overwrite: bool = False,
 ) -> Path:
     """Scaffold a new generated-skill plugin file in the plugins directory.
@@ -122,6 +133,7 @@ def create_plugin(
         author=author,
         description=description,
         tags=tags or [],
+        dependencies=dependencies or [],
     )
     path = _plugin_dir(directory) / f"{clean}.py"
     if path.exists() and not overwrite:
