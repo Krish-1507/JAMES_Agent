@@ -16,10 +16,18 @@ from cryptography.fernet import Fernet, InvalidToken
 from rich.console import Console
 from rich.logging import RichHandler
 
+from .. import __version__
 from ..config import settings
 from ..core.guard import install_offline_guard
 from ..core.scheduler import scheduler
 from ..llm import build_provider
+from ..llm.catalog import (
+    DEFAULT_MODELS,
+    PROVIDER_KEY,
+    PROVIDERS,
+    model_choices,
+    save_llm_config,
+)
 from ..tools.background_tools import configure_background
 from ..tools.delegate_tool import configure_delegate
 from ..tools.desktop_tools import configure_computer_use
@@ -31,6 +39,7 @@ from ..tools.file_manager_tools import (
 from ..tools.forge_tools import configure_forge
 from ..tools.registry import ToolRegistry
 from ..tools.research_tools import configure_research
+from ..ui.cli import create_cli
 from ..voice import build_stt, build_tts
 from .agent import Agent
 from .secrets import load_or_create_secret
@@ -102,6 +111,7 @@ class Assistant:
         self.registry = ToolRegistry()
         self.llm = build_provider(settings.llm)
         self.agent = Agent(self.llm, self.registry)
+        self.cli = create_cli()
         self.stt = build_stt(settings.voice)
         self.tts = build_tts(settings.voice)
         self.history: list[dict] = []
@@ -122,15 +132,21 @@ class Assistant:
         scheduler.start()
         self.on_event = None  # GUI hook: receives dict events (type: user|thinking|reply|speak)
 
-    # ---- live tool hooks (console by default, GUI overrides via set_tool_hooks) ----
+# ---- live tool hooks (console by default, GUI overrides via set_tool_hooks) ----
     def _on_tool_start(self, call_id: str, name: str, args: dict) -> None:
-        console.print(f"[dim]🔧 {name}({_fmt_args(args)})…[/dim]")
+        if getattr(self, "cli", None):
+            self.cli.print_tool_start(name, _fmt_args(args))
+        else:
+            console.print(f"[dim]🔧 {name}({_fmt_args(args)})…[/dim]")
         self._emit({"type": "tool_start", "call_id": call_id, "name": name, "args": args})
 
     def _on_tool(self, call_id: str, name: str, args: dict, result: str) -> None:
         ok = not (result.startswith("Error") or "failed" in result.lower())
-        tag = "[green]✓[/green]" if ok else "[red]✗[/red]"
-        console.print(f"{tag} {name}: {result[:120]}")
+        if getattr(self, "cli", None):
+            self.cli.print_tool_done(name, ok, result)
+        else:
+            tag = "[green]✓[/green]" if ok else "[red]✗[/red]"
+            console.print(f"{tag} {name}: {result[:120]}")
         self._emit(
             {"type": "tool", "call_id": call_id, "name": name, "args": args, "result": result, "ok": ok}
         )
@@ -140,6 +156,110 @@ class Assistant:
         self.agent.on_tool = on_tool
         self.agent.on_tool_start = on_tool_start
         configure_delegate(self.llm, on_tool=on_tool, on_tool_start=on_tool_start)
+
+    def switch_model(self, provider: str, model: str) -> bool:
+        """Rebuild the live LLM provider + agent for a new provider/model.
+
+        Returns True on success. The choice is persisted to ``.env`` so it
+        survives restarts. Callers should check the API key for the provider
+        before switching to avoid a provider that can never succeed.
+        """
+        provider = (provider or "").strip().lower()
+        model = (model or "").strip()
+        if not provider or not model:
+            return False
+
+        prev_provider, prev_model = settings.llm.provider, settings.llm.model
+        settings.llm.provider = provider
+        settings.llm.model = model
+        try:
+            self.llm = build_provider(settings.llm)
+        except Exception:
+            settings.llm.provider, settings.llm.model = prev_provider, prev_model
+            self.log.exception("Failed to build provider for %s/%s", provider, model)
+            return False
+        self.agent = Agent(self.llm, self.registry)
+        configure_delegate(self.llm, on_tool=self._on_tool, on_tool_start=self._on_tool_start)
+        configure_computer_use(self.llm)
+        configure_research(self.llm)
+        configure_background(self.llm)
+        configure_file_manager(self.llm)
+        with suppress(Exception):
+            save_llm_config(provider, model)
+        self.log.info("Switched model -> provider=%s model=%s", provider, model)
+        return True
+
+    def _provider_has_key(self, provider: str) -> bool:
+        """True when a non-empty API key is configured for ``provider``.
+
+        Local/custom endpoints may present with an empty key, so ``custom`` is
+        always allowed through (Ollama uses a dummy key).
+        """
+        if provider == "custom":
+            return True
+        key_var = PROVIDER_KEY.get(provider)
+        if not key_var:
+            return False
+        return bool(os.environ.get(key_var))
+
+    def _select_provider(self) -> bool:
+        """Interactive provider picker for the ``/provider`` slash command."""
+        from rich.prompt import Select
+
+        if not getattr(self, "cli", None):
+            return False
+        provider = Select.ask(
+            "provider",
+            choices=[
+                f"{p}  ·  {DEFAULT_MODELS.get(p, '')}"
+                for p in PROVIDERS
+            ],
+            default=f"{settings.llm.provider}  ·  {DEFAULT_MODELS.get(settings.llm.provider, '')}",
+            show_default=False,
+        )
+        provider = provider.split("  ·  ")[0].strip()
+        if provider != "custom" and not self._provider_has_key(provider):
+            self.cli.print_hint(f"No API key configured for '{provider}'. Configure it in .env.")
+            return False
+        choices = model_choices(provider)
+        if not choices:
+            choices = [DEFAULT_MODELS.get(provider, "gpt-4o-mini")]
+        default = settings.llm.model if provider == settings.llm.provider else DEFAULT_MODELS.get(provider, choices[0])
+        model = Select.ask(
+            f"model for {provider}:",
+            choices=choices,
+            default=default,
+            show_default=False,
+        )
+        ok = self.switch_model(provider, model)
+        if ok and getattr(self, "cli", None):
+            self.cli.print_session_message(f"Now using {provider}:{model}")
+        return ok
+
+    def _select_model(self) -> bool:
+        """Interactive model picker for the ``/model`` slash command."""
+        if not getattr(self, "cli", None):
+            return False
+        provider = settings.llm.provider
+        choices = model_choices(provider)
+        if not choices:
+            from rich.prompt import Prompt as RichPrompt
+
+            model = RichPrompt.ask(f"Enter an id for the {provider} provider", default=settings.llm.model)
+            return self.switch_model(provider, model)
+        try:
+            from rich.prompt import Select
+        except ImportError:
+            return False
+        model = Select.ask(
+            f"choose a model for {provider}",
+            choices=choices,
+            default=settings.llm.model,
+            show_default=False,
+        )
+        if self.switch_model(provider, model) and getattr(self, "cli", None):
+            self.cli.print_session_message(f"Model set to {model}")
+        return True
 
     def _emit(self, event: dict) -> None:
         if self.on_event:
@@ -289,11 +409,14 @@ class Assistant:
                 facts.append({"source": "assistant", "text": content[:200]})
         return facts[-20:]
 
-    def speak(self, text: str) -> None:
+    def speak(self, text: str, *, cli=None) -> None:
         text = (text or "").strip()
         if not text:
             return
-        console.print(f"[bold cyan]{settings.assistant.name}:[/bold cyan] {text}")
+        if cli is not None:
+            cli.print_assistant(settings.assistant.name, text)
+        else:
+            console.print(f"[bold cyan]{settings.assistant.name}:[/bold cyan] {text}")
         self._emit({"type": "speak", "text": text})
         try:
             self.tts.speak(text)
@@ -369,15 +492,22 @@ class Assistant:
         if not user_text:
             return
         self._emit({"type": "user", "text": user_text})
-        console.print(f"[green]{settings.assistant.user_name}:[/green] {user_text}")
+        if getattr(self, "cli", None):
+            self.cli.print_user(user_text)
+        else:
+            console.print(f"[green]{settings.assistant.user_name}:[/green] {user_text}")
         try:
             self._emit({"type": "thinking"})
-            reply = self.think(user_text)
+            if getattr(self, "cli", None):
+                with self.cli.thinking():
+                    reply = self.think(user_text)
+            else:
+                reply = self.think(user_text)
         except Exception:
             self.log.exception("Agent error")
             reply = "Something went wrong. Please try again."
         self._emit({"type": "reply", "text": reply})
-        self.speak(reply)
+        self.speak(reply, cli=getattr(self, "cli", None))
 
     def greet(self) -> None:
         import datetime
@@ -462,18 +592,26 @@ class Assistant:
             engine.close()
 
     def text_loop(self) -> None:
-        self.greet()
-        console.print("[dim]Type 'exit' or 'quit' to leave.[/dim]")
-        console.print(
-            "[dim]Session commands: /new, /sessions, /resume <name>, /clear, /export[/dim]"
+        self.cli.print_logo(__version__)
+        self.cli.print_header(
+            provider=settings.llm.provider,
+            model=settings.llm.model,
+            session=self.current_session() or "default",
+            version=__version__,
+        )
+        self.cli.print_welcome(settings.assistant.name, settings.assistant.user_name)
+        self.cli.print_hint(
+            "Type 'exit' or 'quit' to leave. Commands: /new, /sessions, "
+            "/resume <name>, /clear, /export, /provider, /model"
         )
         while True:
             try:
-                user_text = input(f"{settings.assistant.user_name}: ").strip()
+                user_text = self.cli.read_prompt(settings.assistant.user_name)
             except (EOFError, KeyboardInterrupt):
                 break
+            user_text = (user_text or "").strip()
             if user_text.lower() in {"exit", "quit", "stop"}:
-                self.speak("Goodbye!")
+                self.speak("Goodbye!", cli=self.cli)
                 break
             if self._handle_session_command(user_text):
                 continue
@@ -515,6 +653,15 @@ class Assistant:
         if verb == "/export":
             path = self.export_conversation("markdown")
             console.print(f"[dim]Exported to {path}.[/dim]")
+            return True
+        if verb == "/model":
+            if arg:
+                self.cli.print_hint("Usage: /model opens the interactive model picker.")
+            else:
+                self._select_model()
+            return True
+        if verb == "/provider":
+            self._select_provider()
             return True
         return False
 

@@ -158,6 +158,9 @@ def test_orb_model_change_updates_settings(monkeypatch: pytest.MonkeyPatch) -> N
         from james.ui.orb import OrbWindow
     except ImportError:
         pytest.skip("PyQt5 not installed")
+
+    monkeypatch.setattr("james.llm.catalog.save_llm_config", lambda provider, model: None)
+
     window = OrbWindow.__new__(OrbWindow)
     window.log = type("_Log", (), {"appendPlainText": lambda self, s: None})()
     window._on_model_change("groq:llama-3.3-70b")

@@ -11,6 +11,8 @@ A system tray icon lets you hide/show and quit.
 """
 from __future__ import annotations
 
+import threading
+
 from PyQt5.QtCore import QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QIcon, QPainter
 from PyQt5.QtWidgets import (
@@ -57,6 +59,26 @@ class _Worker(QThread):
     def __init__(self):
         super().__init__()
         self._assistant = None
+        self._lock = threading.Lock()
+
+    def apply_model(self, provider: str, model: str) -> bool:
+        """Immediately switch the running assistant to a new provider+model.
+
+        Called from the GUI thread. The provider/agent rebuild is safe under the
+        GIL; an in-flight agent call keeps its own provider reference, so the
+        switch takes effect from the next turn onward.
+        """
+        with self._lock:
+            assistant = self._assistant
+        if assistant is None:
+            return False
+        with self._lock:
+            try:
+                ok = assistant.switch_model(provider, model)
+            except Exception:
+                ok = False
+        self.status.emit("Model updated" if ok else "Model switch failed")
+        return ok
 
     def run(self):
         from ..core.assistant import Assistant
@@ -121,11 +143,15 @@ class OrbWindow(QMainWindow):
         self.orb.setStyleSheet("font-size:40px; color:#39c; qproperty-alignment:AlignCenter;")
         layout.addWidget(self.orb)
 
-        # Model switcher
+        # Model switcher (curated from the shared catalog)
         model_layout = QHBoxLayout()
         model_layout.addWidget(QLabel("Model:"))
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["openai:gpt-4o-mini", "anthropic:claude-3-sonnet", "groq:llama-3.3-70b", "mistral:mistral-large-latest", "xai:grok-3", "deepseek:deepseek-chat", "together:meta-llama/Llama-3.3-70B-Instruct-Turbo", "cerebras:llama-3.3-70b", "cohere:command-r-plus", "custom:local"])
+        self.model_combo.setEditable(False)
+        self.model_combo.blockSignals(True)
+        self.model_combo.addItems(self._model_items())
+        self.model_combo.setCurrentIndex(self._current_model_index())
+        self.model_combo.blockSignals(False)
         self.model_combo.currentTextChanged.connect(self._on_model_change)
         model_layout.addWidget(self.model_combo)
         layout.addLayout(model_layout)
@@ -235,19 +261,56 @@ class OrbWindow(QMainWindow):
         except Exception as exc:
             self.log.appendPlainText(f"MCP toggle error: {exc}")
 
+    def _model_items(self) -> list[str]:
+        """Flatten the shared catalog into ``provider:model`` combo entries."""
+        from ..llm.catalog import DEFAULT_MODELS, PROVIDERS, model_choices
+
+        items: list[str] = []
+        for prov in PROVIDERS:
+            choices = model_choices(prov) or [DEFAULT_MODELS.get(prov, "gpt-4o-mini")]
+            for m in choices:
+                items.append(f"{prov}:{m}")
+        return items
+
+    def _current_model_index(self) -> int:
+        """Find the combo index matching the active settings, or 0."""
+        from ..config import settings
+
+        current = f"{settings.llm.provider}:{settings.llm.model}"
+        items = self._model_items()
+        for i, item in enumerate(items):
+            if item == current:
+                return i
+        return 0
+
     def _on_model_change(self, text: str) -> None:
         provider, _, model = text.partition(":")
+        if not provider or not model:
+            return
         import os
 
         from ..config import settings
+        from ..llm.catalog import save_llm_config
 
+        # Persist + update live settings so a not-yet-started worker picks it up.
         settings.llm.provider = provider
         settings.llm.model = model
+        if provider == "custom":
+            settings.llm.custom_base_url = (
+                settings.llm.custom_base_url or "http://localhost:11434/v1"
+            )
         os.environ["LLM_PROVIDER"] = provider
         os.environ["LLM_MODEL"] = model
-        self.log.appendPlainText(
-            f"Model set to {provider}:{model}. Restart JAMES (Pause → Start) for it to take effect."
-        )
+        save_llm_config(provider, model)
+
+        worker = vars(self).get("worker")
+        if worker is not None and worker.apply_model(provider, model):
+            self.log.appendPlainText(f"Model switched to {provider}:{model}.")
+        else:
+            self.log.appendPlainText(
+                f"Model set to {provider}:{model}. It applies when JAMES starts "
+                f"(assistant not ready yet)."
+            )
 
     def _on_pause(self) -> None:
         self._paused = not self._paused

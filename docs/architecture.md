@@ -8,9 +8,11 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
 ```text
 ┌────────────────────────────────────────────┐
 │ CLI / GUI / Dashboard / Voice loop          │
+│   • JamesCLI (OpenCode-style rich renderer) │
+│   • PyQt orb (desktop, catalog dropdown)    │
 ├────────────────────────────────────────────┤
 │ Assistant (sessions, history, memory,      │
-│           skills, events)                   │
+│           skills, events, switch_model)     │
 ├────────────────────────────────────────────┤
 │ Agent (LLM provider + ToolRegistry)        │
 ├────────────────────────────────────────────┤
@@ -36,6 +38,10 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
 - **`james.llm`** — pluggable LLM providers (OpenAI, Anthropic, Gemini,
   OpenRouter, Groq, Mistral, xAI, DeepSeek, Together, Cerebras, Cohere, and
   any OpenAI-compatible custom/local endpoint) with automatic failover.
+- **`james.llm.catalog`** — the shared provider/model catalog plus
+  `save_llm_config`, which persists `LLM_PROVIDER`/`LLM_MODEL` back to `.env`.
+  Used by the CLI pickers, the desktop dropdown, and the setup wizard.
+- **`james.ui.cli`** — `JamesCLI`, the rich/OpenCode-style terminal renderer.
 - **`james.config`** — validated settings loaded from `.env`.
 - **`james.sdk`** — the stable plugin authoring surface (see
   [plugins.md](plugins.md)).

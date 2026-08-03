@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- OpenCode-style terminal chat UI: `james --text` now renders the ASCII JAMES
+  logo, a provider/model/session/version status bar, colour-coded message
+  panels, a living thinking spinner, inline tool status, and a styled input
+  field (`james/ui/cli.py`, wired into `Assistant.text_loop`).
+- Interactive model selection in **both** interfaces:
+  - Terminal: `/provider` and `/model` slash commands open rich pickers built
+    from a shared catalog; `custom` accepts any model id.
+  - Desktop: the dropdown is now populated from the shared catalog and applies
+    the chosen `provider:model` immediately (thread-safe) without a restart.
+  - A new `Assistant.switch_model(...)` rebuilds the live provider + agent and
+    persists the choice.
+- Shared model catalog `james/llm/catalog.py` — providers, default models,
+  curated per-provider model lists, and `save_llm_config` which writes
+  `LLM_PROVIDER`/`LLM_MODEL` back to `.env`. `onboarding.py` now reuses it.
 - `james` is now a first-class global command after install: `james` launches
   the desktop app (default), `james --text` / `james --voice` run the terminal
   CLI, and `james --setup` re-runs the wizard. Installers install to a stable
@@ -68,6 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fallback to `always` when pvporcupine is missing.
 
 ### Fixed
+- Terminal output could crash on legacy Windows consoles (cp1252) when drawing
+  box/marker glyphs; `JamesCLI` now reconfigures the output streams to UTF-8.
+- Desktop model switcher no longer silently requires a restart; changes apply
+  immediately when the assistant is running.
 - `test_http_url_accepted` called the real `open_application`, which opened
   `https://example.com` in the user's browser on every test run. The test now
   mocks `webbrowser.open`.

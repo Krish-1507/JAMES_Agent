@@ -26,3 +26,12 @@ The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contai
 ## Project status
 
 JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, voice providers, memory, encrypted history, optional offline operation, a constrained Skill Forge, and a documented plugin SDK (`james.sdk`).
+
+## Interfaces and model selection
+
+- **Terminal CLI** (`james --text`) uses an OpenCode-style chat UI: ASCII logo,
+  status header, colour-coded message panels, spinner, and styled input.
+- **Model selection** is available in both the terminal and the desktop app:
+  `/provider` and `/model` open interactive pickers in the CLI, and the desktop
+  dropdown applies a `provider:model` immediately. Choices persist to `.env`
+  via the shared catalog in `james/llm/catalog.py`.

@@ -13,52 +13,7 @@ from contextlib import suppress
 from pathlib import Path
 
 from .config import PROJECT_ROOT
-
-PROVIDERS = [
-    "openai",
-    "anthropic",
-    "gemini",
-    "openrouter",
-    "groq",
-    "mistral",
-    "xai",
-    "deepseek",
-    "together",
-    "cerebras",
-    "cohere",
-    "custom",
-]
-
-# env key used by each provider to hold the API token
-_PROVIDER_KEY = {
-    "openai": "OPENAI_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "gemini": "GEMINI_API_KEY",
-    "openrouter": "OPENROUTER_API_KEY",
-    "groq": "GROQ_API_KEY",
-    "mistral": "MISTRAL_API_KEY",
-    "xai": "XAI_API_KEY",
-    "deepseek": "DEEPSEEK_API_KEY",
-    "together": "TOGETHER_API_KEY",
-    "cerebras": "CEREBRAS_API_KEY",
-    "cohere": "COHERE_API_KEY",
-    "custom": "CUSTOM_API_KEY",
-}
-
-_DEFAULT_MODEL = {
-    "openai": "gpt-4o-mini",
-    "anthropic": "claude-3-5-sonnet-latest",
-    "gemini": "gemini-2.0-flash",
-    "openrouter": "deepseek/deepseek-chat",
-    "groq": "llama-3.3-70b-versatile",
-    "mistral": "mistral-large-latest",
-    "xai": "grok-3",
-    "deepseek": "deepseek-chat",
-    "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    "cerebras": "llama-3.3-70b",
-    "cohere": "command-r-plus",
-    "custom": "local-model",
-}
+from .llm.catalog import DEFAULT_MODELS, PROVIDER_KEY, PROVIDERS
 
 
 def env_exists() -> bool:
@@ -149,7 +104,7 @@ def run_onboarding(force: bool = False) -> Path:
     ]
     if base_url:
         lines.append(f"CUSTOM_BASE_URL={base_url}")
-    lines.append(f"{_PROVIDER_KEY[provider]}={api_key}")
+    lines.append(f"{PROVIDER_KEY[provider]}={api_key}")
     lines.append("")
     lines.append("# Voice / speech")
     lines.append(f"VOICE_ENABLED={'true' if voice else 'false'}")
@@ -184,15 +139,15 @@ def _prompt_credentials() -> tuple[str, str, str, str]:
     )
     detected = detect_provider(api_key)
     if detected:
-        default_model = _DEFAULT_MODEL[detected]
+        default_model = DEFAULT_MODELS[detected]
         print(f"  • Detected provider: {detected}")
         provider = _ask("Provider", detected).lower() or detected
-        if provider not in _PROVIDER_KEY:
+        if provider not in PROVIDER_KEY:
             print(f"  Unknown provider '{provider}' — using the provider menu.")
             provider = _choose_provider()
         if provider == "custom":
             base_url = _ask("Local model base URL", "http://localhost:11434/v1")
-            model = _ask("Model id", _DEFAULT_MODEL["custom"])
+            model = _ask("Model id", DEFAULT_MODELS["custom"])
             return provider, base_url, model, api_key
         model = _ask("Model", default_model) or default_model
         return provider, "", model, api_key
@@ -202,11 +157,11 @@ def _prompt_credentials() -> tuple[str, str, str, str]:
     provider = _choose_provider()
     if provider == "custom":
         base_url = _ask("Local model base URL", "http://localhost:11434/v1")
-        model = _ask("Model id", _DEFAULT_MODEL["custom"])
+        model = _ask("Model id", DEFAULT_MODELS["custom"])
         api_key = api_key or _ask("API key (blank for local servers like Ollama)")
         return provider, base_url, model, api_key
 
-    model = _ask("Model", _DEFAULT_MODEL[provider]) or _DEFAULT_MODEL[provider]
+    model = _ask("Model", DEFAULT_MODELS[provider]) or DEFAULT_MODELS[provider]
     api_key = api_key or _ask(f"API key (create one at the {provider} console)")
     return provider, "", model, api_key
 

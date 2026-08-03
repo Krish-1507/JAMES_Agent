@@ -13,6 +13,12 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
 ## What works today
 
 - Text and voice interaction, with configurable STT/TTS providers.
+- A professional, OpenCode-style terminal chat UI (`james --text`): ASCII
+  logo, status header, colour-coded message panels, live thinking spinner, and
+  a styled input field.
+- Model selection everywhere — pick provider and model interactively in the
+  terminal (`/provider`, `/model`) and from the desktop app dropdown. Choices
+  persist to your `.env`.
 - OpenAI, Anthropic, Gemini, OpenRouter, Groq, Mistral, xAI (Grok), DeepSeek,
   Together, Cerebras, Cohere, and any OpenAI-compatible custom endpoint (Ollama,
   LM Studio, vLLM...).
@@ -64,6 +70,25 @@ james --text       # terminal CLI
 james --voice      # terminal voice mode
 james --setup      # re-run the wizard anytime
 ```
+
+### Terminal chat (CLI)
+
+`james --text` opens the OpenCode-style chat: it prints the JAMES logo, a status
+bar with the active provider, model, session, and version, then renders each
+turn as a colour-coded panel with a live spinner while JAMES thinks. Tool calls
+stream inline as they execute.
+
+### Choosing a model
+
+- **Terminal:** type `/provider` to switch providers or `/model` to switch the
+  model for the current provider. Both open an interactive picker built from
+  the curated model catalog. `custom` lets you type any id (Ollama, LM Studio,
+  vLLM...).
+- **Desktop app:** pick any `provider:model` from the dropdown; JAMES applies it
+  immediately without a restart.
+- Your choice is written back to `.env` (`LLM_PROVIDER`, `LLM_MODEL`) so it
+  sticks across sessions. The `--provider` / `--model` flags override the
+  current selection for a single run.
 
 ### Manual install
 
@@ -226,8 +251,10 @@ Core modules:
 - `james/tools/registry.py` — tool registration, permissions, rate limit, audit trail, plugin boundary.
 - `james/core/command_policy.py` — shell-free read-only command policy.
 - `james/tools/forge_tools.py` — constrained generated-skill runtime.
-- `james/core/assistant.py` — orchestration and encrypted history.
+- `james/core/assistant.py` — orchestration, encrypted history, and `switch_model` (live provider/agent rebuild).
 - `james/core/guard.py` — offline egress guard.
+- `james/ui/cli.py` — the OpenCode-style terminal renderer (`JamesCLI`).
+- `james/llm/catalog.py` — the shared provider/model catalog used by the CLI pickers, the desktop dropdown, and setup.
 - `james/sdk/` — the plugin authoring SDK (manifest, validation, scaffolding).
 
 ## Roadmap to v1
