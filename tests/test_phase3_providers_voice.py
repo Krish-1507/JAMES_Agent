@@ -1,4 +1,5 @@
 """Tests for Phase 3 additions: provider presets and voice/TTS defaults."""
+
 from __future__ import annotations
 
 import pytest
@@ -36,18 +37,28 @@ class TestProviderPresets:
 
     @pytest.mark.parametrize(
         "provider",
-        ["openai", "openrouter", "groq", "mistral", "xai", "deepseek", "together", "cerebras", "cohere"],
+        [
+            "openai",
+            "openrouter",
+            "groq",
+            "mistral",
+            "xai",
+            "deepseek",
+            "together",
+            "cerebras",
+            "cohere",
+        ],
     )
     def test_preset_builds_openai_compatible_provider(self, provider: str) -> None:
-        provider_instance = build_provider(
-            LLMSettings(provider=provider, model="test-model")
-        )
+        provider_instance = build_provider(LLMSettings(provider=provider, model="test-model"))
         assert isinstance(provider_instance, OpenAICompatibleProvider)
         assert provider_instance.model == "test-model"
 
     def test_custom_uses_configured_base_url(self) -> None:
         provider_instance = build_provider(
-            LLMSettings(provider="custom", model="llama3", custom_base_url="http://127.0.0.1:11434/v1")
+            LLMSettings(
+                provider="custom", model="llama3", custom_base_url="http://127.0.0.1:11434/v1"
+            )
         )
         assert isinstance(provider_instance, OpenAICompatibleProvider)
 
@@ -79,7 +90,9 @@ class TestVoiceDefaults:
     def test_tts_default_is_edge(self) -> None:
         assert settings.voice.tts_provider == "edge"
 
-    def test_build_tts_edge_preferred_when_dep_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_build_tts_edge_preferred_when_dep_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import james.voice.tts as tts_module
 
         def _no_edge(*_args, **_kwargs):

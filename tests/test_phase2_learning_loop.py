@@ -5,6 +5,7 @@ recall (summaries persist to long-term memory), and the marketplace loop
 (publish a skill to the catalog, then install it back through the constrained
 runtime).
 """
+
 from __future__ import annotations
 
 import json
@@ -15,13 +16,13 @@ import pytest
 from james.config import settings
 from james.llm.base import LLMProvider, LLMResponse
 
-_VALID_SKILL_CODE = '''
+_VALID_SKILL_CODE = """
 from james.tools.base import tool, ToolResult
 
 @tool("double_number", "Double a number.", {"value": {"type": "integer"}}, required=["value"])
 def double_number(value):
     return ToolResult(ok=True, output=str(value * 2))
-'''
+"""
 
 
 class _SummaryProvider(LLMProvider):
@@ -107,7 +108,9 @@ def test_summary_not_persisted_when_short(isolated_workspace: Path) -> None:
     assert not settings.assistant.memory_file.exists()
 
 
-def test_summary_persisted_when_memory_disabled(isolated_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_summary_persisted_when_memory_disabled(
+    isolated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(settings.assistant, "memory_enabled", False)
     from james.core.assistant import Assistant
 

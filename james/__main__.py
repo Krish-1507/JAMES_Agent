@@ -1,4 +1,5 @@
 """Entry point: `james` (desktop app), `james --text` (CLI), or `python -m james`."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,8 +11,7 @@ from .config import settings
 from .core.assistant import Assistant
 
 PROVIDER_HELP = (
-    "openai|anthropic|gemini|openrouter|groq|mistral|xai|deepseek|"
-    "together|cerebras|cohere|custom"
+    "openai|anthropic|gemini|openrouter|groq|mistral|xai|deepseek|together|cerebras|cohere|custom"
 )
 
 
@@ -74,22 +74,40 @@ def main(argv: list[str] | None = None) -> int:
         description="JAMES — your open-source, voice-first assistant.\n\n"
         "No arguments launches the desktop app. Use --text or --voice for the terminal.",
     )
+    parser.add_argument("--version", action="version", version=f"james {__version__}")
     parser.add_argument(
-        "--version", action="version", version=f"james {__version__}"
+        "--text",
+        action="store_true",
+        help="Run the terminal CLI in text-only mode (no microphone).",
     )
-    parser.add_argument("--text", action="store_true", help="Run the terminal CLI in text-only mode (no microphone).")
     parser.add_argument("--voice", action="store_true", help="Run the terminal CLI in voice mode.")
-    parser.add_argument("--ui", action="store_true", help="Force the desktop app (default when no mode is given).")
+    parser.add_argument(
+        "--ui", action="store_true", help="Force the desktop app (default when no mode is given)."
+    )
     parser.add_argument("--provider", help=f"Override LLM_PROVIDER ({PROVIDER_HELP}).")
     parser.add_argument("--model", help="Override the model id.")
     parser.add_argument("--check", action="store_true", help="Validate configuration and exit.")
-    parser.add_argument("--new-tool", metavar="NAME", help="Scaffold a new plugin tool file in ./plugins/.")
-    parser.add_argument("--web-dashboard", action="store_true", help="Launch the web-based dashboard.")
+    parser.add_argument(
+        "--new-tool", metavar="NAME", help="Scaffold a new plugin tool file in ./plugins/."
+    )
+    parser.add_argument(
+        "--web-dashboard", action="store_true", help="Launch the web-based dashboard."
+    )
     parser.add_argument("--eval", metavar="SUITE", help="Run a benchmark suite and print results.")
-    parser.add_argument("--offline", action="store_true", help="Privacy mode: block ALL non-local network egress (audited).")
-    parser.add_argument("--doctor", action="store_true", help="Run self-diagnostic checks and exit.")
-    parser.add_argument("--setup", action="store_true", help="Run the interactive first-run setup wizard.")
-    parser.add_argument("--session", metavar="NAME", help="Start or resume a named conversation session.")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Privacy mode: block ALL non-local network egress (audited).",
+    )
+    parser.add_argument(
+        "--doctor", action="store_true", help="Run self-diagnostic checks and exit."
+    )
+    parser.add_argument(
+        "--setup", action="store_true", help="Run the interactive first-run setup wizard."
+    )
+    parser.add_argument(
+        "--session", metavar="NAME", help="Start or resume a named conversation session."
+    )
     parser.add_argument("command", nargs="?", help="Optional command: 'doctor'.")
     args = parser.parse_args(argv)
 
@@ -176,7 +194,9 @@ def main(argv: list[str] | None = None) -> int:
         for k, v in keys.items():
             print(f"  {k:>14}: {v}")
         if not keys["api_key_set"]:
-            print("\n[!] No API key set for the selected provider. Copy .env.example to .env and fill it in.")
+            print(
+                "\n[!] No API key set for the selected provider. Copy .env.example to .env and fill it in."
+            )
         return 0
 
     if not settings.llm.api_key:

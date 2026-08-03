@@ -18,6 +18,7 @@ Basic usage:
     def hello(name: str) -> ToolResult:
         return ToolResult(ok=True, output=f"Hello, {name}!")
 """
+
 from __future__ import annotations
 
 from pathlib import Path

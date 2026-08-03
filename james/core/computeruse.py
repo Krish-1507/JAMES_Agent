@@ -5,6 +5,7 @@ execute the action with pyautogui, repeat. No cloud browser required — the
 model can be a local Ollama vision model (e.g. llava) in offline mode. This is
 JAMES's "computer-use": it can operate any desktop app the way a human would.
 """
+
 from __future__ import annotations
 
 import base64
@@ -57,7 +58,9 @@ def _act(action: dict) -> str:
         pyautogui.press(str(action.get("key", "enter")))
         return f"pressed {action.get('key')}"
     if kind == "scroll":
-        pyautogui.scroll(int(action.get("dy", 0)), x=int(action.get("x", 0)), y=int(action.get("y", 0)))
+        pyautogui.scroll(
+            int(action.get("dy", 0)), x=int(action.get("x", 0)), y=int(action.get("y", 0))
+        )
         return f"scrolled {action.get('dy')}"
     if kind == "wait":
         import time

@@ -1,4 +1,5 @@
 """Scheduler — reminders and delayed/recurring tasks that fire in the background."""
+
 from __future__ import annotations
 
 import json
@@ -64,7 +65,14 @@ class Scheduler:
         os.replace(temp_path, self.path)
 
     # ---- API ----
-    def add(self, at: datetime, *, command: str | None = None, message: str | None = None, repeat: str | None = None) -> str:
+    def add(
+        self,
+        at: datetime,
+        *,
+        command: str | None = None,
+        message: str | None = None,
+        repeat: str | None = None,
+    ) -> str:
         if command and not _validate_command(command):
             raise ValueError("Scheduled command is not in the read-only command allowlist.")
         if repeat not in (None, "daily", "hourly"):
@@ -72,8 +80,11 @@ class Scheduler:
         with self._lock:
             jobs = self._load()
             job = Job(
-                id=f"job{time.time_ns()}", at=at.isoformat(timespec="seconds"),
-                command=command, message=message, repeat=repeat,
+                id=f"job{time.time_ns()}",
+                at=at.isoformat(timespec="seconds"),
+                command=command,
+                message=message,
+                repeat=repeat,
             )
             jobs.append(job)
             self._save(jobs)
@@ -88,8 +99,6 @@ class Scheduler:
             new = [j for j in jobs if j.id != job_id]
             self._save(new)
         return len(new) != len(jobs)
-
-
 
     def _fire(self, job: Job) -> None:
         if job.message:
@@ -158,9 +167,14 @@ def parse_when(when: str) -> datetime:
         except ValueError:
             n = 1
         unit = parts[1] if len(parts) > 1 else "minutes"
-        delta = {"minute": timedelta(minutes=n), "minutes": timedelta(minutes=n),
-                 "hour": timedelta(hours=n), "hours": timedelta(hours=n),
-                 "day": timedelta(days=n), "days": timedelta(days=n)}.get(unit, timedelta(minutes=n))
+        delta = {
+            "minute": timedelta(minutes=n),
+            "minutes": timedelta(minutes=n),
+            "hour": timedelta(hours=n),
+            "hours": timedelta(hours=n),
+            "day": timedelta(days=n),
+            "days": timedelta(days=n),
+        }.get(unit, timedelta(minutes=n))
         return datetime.now() + delta
     try:
         today = datetime.now().replace(microsecond=0)

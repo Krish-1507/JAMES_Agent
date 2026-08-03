@@ -1,4 +1,5 @@
 """JAMES personality and system prompt."""
+
 from __future__ import annotations
 
 from ..config import settings
@@ -12,7 +13,6 @@ Principles:
 - Report concrete results (file paths, summaries).
 - Never invent file paths or commands you cannot verify.
 """
-
 
 
 def build_system_prompt() -> str:

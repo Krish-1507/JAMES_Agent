@@ -3,6 +3,7 @@
 These let JAMES actually *use* websites: navigate, click, fill forms and read
 results back as text. Great for booking, shopping, filling web forms, etc.
 """
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -34,8 +35,8 @@ def _get_page():
     from playwright.sync_api import sync_playwright
 
     try:
-        _browser = sync_playwright().start().chromium.launch(
-            headless=settings.assistant.browser_headless
+        _browser = (
+            sync_playwright().start().chromium.launch(headless=settings.assistant.browser_headless)
         )
         _page = _browser.new_page()
         return _page
@@ -72,8 +73,6 @@ def _health_check() -> bool:
         _close()
         _browser_errors = 0
         return False
-
-
 
 
 @tool(
@@ -169,7 +168,9 @@ def browser_health() -> ToolResult:
         healthy = _health_check()
         if healthy:
             return ToolResult(ok=True, output="Browser is healthy.")
-        return ToolResult(ok=False, output="Browser is not running. Use browser_navigate to start a session.")
+        return ToolResult(
+            ok=False, output="Browser is not running. Use browser_navigate to start a session."
+        )
     except Exception as exc:
         return ToolResult(ok=False, output=f"Browser health check failed: {exc}")
 

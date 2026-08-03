@@ -7,6 +7,7 @@ browser-use, databases, thousands of community servers).
 
 Requires the optional `mcp` package:  pip install mcp
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -88,14 +89,20 @@ def _extract_text(result) -> str:
 
 _MAX_MCP_ARGS_SIZE = 65536
 
-_SENSITIVE_KEY_PATTERNS = re.compile(r'api[_-]?key|secret|token|password|passwd|auth|credential', re.IGNORECASE)
+_SENSITIVE_KEY_PATTERNS = re.compile(
+    r"api[_-]?key|secret|token|password|passwd|auth|credential", re.IGNORECASE
+)
 
 
 def _validate_mcp_arguments(arguments: dict, tool_name: str) -> dict:
     if not isinstance(arguments, dict):
-        raise ValueError(f"Arguments for '{tool_name}' must be a dict, got {type(arguments).__name__}")
+        raise ValueError(
+            f"Arguments for '{tool_name}' must be a dict, got {type(arguments).__name__}"
+        )
     if len(str(arguments)) > _MAX_MCP_ARGS_SIZE:
-        raise ValueError(f"Arguments for '{tool_name}' exceed maximum size of {_MAX_MCP_ARGS_SIZE} bytes")
+        raise ValueError(
+            f"Arguments for '{tool_name}' exceed maximum size of {_MAX_MCP_ARGS_SIZE} bytes"
+        )
     sanitized = {}
     for key, value in arguments.items():
         if not isinstance(key, str):
@@ -176,6 +183,7 @@ def discover_mcp_tools() -> list[Tool]:
     tools: list[Tool] = []
     for spec in load_mcp_configs():
         try:
+
             async def _list(session):
                 return (await session.list_tools()).tools
 

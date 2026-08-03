@@ -1,4 +1,5 @@
 """Release-hardening coverage for workspace, signing, isolation, and desktop approvals."""
+
 from __future__ import annotations
 
 import os
@@ -48,11 +49,15 @@ def test_plugin_signature_detects_tampering(plugin_dir: Path) -> None:
     signed = sign_plugin_source(unsigned_path.read_text(encoding="utf-8"), private_pem, "release")
     ok, reason = verify_plugin_signature(signed, {"release": public_pem})
     assert ok, reason
-    ok, _ = verify_plugin_signature(signed.replace("Processed input", "Tampered"), {"release": public_pem})
+    ok, _ = verify_plugin_signature(
+        signed.replace("Processed input", "Tampered"), {"release": public_pem}
+    )
     assert not ok
 
 
-@pytest.mark.skipif(os.getenv("CI") == "true" and os.name != "nt", reason="Qt runtime optional in CI")
+@pytest.mark.skipif(
+    os.getenv("CI") == "true" and os.name != "nt", reason="Qt runtime optional in CI"
+)
 def test_desktop_approval_defaults_to_deny_and_redacts(monkeypatch: pytest.MonkeyPatch) -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     pytest.importorskip("PyQt5")
@@ -74,7 +79,9 @@ def test_desktop_approval_defaults_to_deny_and_redacts(monkeypatch: pytest.Monke
     app.processEvents()
 
 
-def test_assistant_preserves_confirmation_and_hooks_on_model_switch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assistant_preserves_confirmation_and_hooks_on_model_switch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from james.core import assistant as assistant_module
 
     class FakeProvider:
@@ -85,6 +92,7 @@ def test_assistant_preserves_confirmation_and_hooks_on_model_switch(monkeypatch:
     monkeypatch.setattr(assistant_module, "build_stt", lambda _settings: object())
     monkeypatch.setattr(assistant_module, "build_tts", lambda _settings: object())
     monkeypatch.setattr(assistant_module.scheduler, "start", lambda: None)
+
     def confirm(_name, _args):
         return True
 
@@ -95,6 +103,7 @@ def test_assistant_preserves_confirmation_and_hooks_on_model_switch(monkeypatch:
 
     def start_hook(*_args):
         return None
+
     instance.set_tool_hooks(hook, start_hook)
     assert instance.switch_model(settings.llm.provider, settings.llm.model)
     assert instance.agent.confirm is confirm

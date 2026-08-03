@@ -1,4 +1,5 @@
 """Tests for JAMES security and core functionality."""
+
 from __future__ import annotations
 
 import os
@@ -138,9 +139,7 @@ class TestSchedulerCommandValidation:
 
 class TestPerToolPermissions:
     def test_allowed_tools_enforced(self, monkeypatch):
-        monkeypatch.setattr(
-            settings.assistant, "allowed_tools", ["read_file", "write_file"]
-        )
+        monkeypatch.setattr(settings.assistant, "allowed_tools", ["read_file", "write_file"])
         monkeypatch.setattr(settings.assistant, "denied_tools", [])
         from james.tools.file_tools import delete_file, read_file
 
@@ -231,6 +230,7 @@ class TestEnvSecurity:
 
         with pytest.warns(UserWarning, match="world-readable"):
             from james.config import _warn_env_permissions
+
             _warn_env_permissions(env_file)
 
 

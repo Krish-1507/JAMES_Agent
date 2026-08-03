@@ -1,4 +1,5 @@
 """Regression coverage for the security hardening changes."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -52,7 +53,9 @@ def bad():
     assert any("Attribute is not allowed" in issue for issue in issues)
 
 
-def test_generated_skills_load_only_constrained_code(isolated_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generated_skills_load_only_constrained_code(
+    isolated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from james.tools import forge_tools
 
     monkeypatch.setattr(forge_tools, "_PLUGINS_DIR", isolated_workspace / "plugins")

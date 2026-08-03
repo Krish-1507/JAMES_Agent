@@ -12,6 +12,7 @@ A lightweight HTTP server that serves a dashboard showing:
 
 Run with:  python -m james --web-dashboard
 """
+
 from __future__ import annotations
 
 import json
@@ -130,13 +131,15 @@ class _DashboardHandler(BaseHTTPRequestHandler):
     def _get_tools(self) -> dict:
         tools = []
         for t in ALL_TOOLS:
-            tools.append({
-                "name": t.name,
-                "description": t.description[:120],
-                "dangerous": t.name in DANGEROUS_TOOLS,
-                "parameters": t.parameters,
-                "required": t.required,
-            })
+            tools.append(
+                {
+                    "name": t.name,
+                    "description": t.description[:120],
+                    "dangerous": t.name in DANGEROUS_TOOLS,
+                    "parameters": t.parameters,
+                    "required": t.required,
+                }
+            )
         return {"tools": tools}
 
     def _load_history_messages(self) -> list:
@@ -159,12 +162,14 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         configs = load_mcp_configs()
         servers = []
         for cfg in configs:
-            servers.append({
-                "name": cfg.name,
-                "transport": cfg.transport,
-                "command": cfg.command,
-                "url": cfg.url,
-            })
+            servers.append(
+                {
+                    "name": cfg.name,
+                    "transport": cfg.transport,
+                    "command": cfg.command,
+                    "url": cfg.url,
+                }
+            )
         return {"servers": servers}
 
     def _get_memory(self) -> dict:
@@ -186,6 +191,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         server_name = data.get("name")
         if action == "enable" and server_name:
             from ..tools.mcp_tools import load_mcp_configs
+
             configs = load_mcp_configs()
             for cfg in configs:
                 if cfg.name == server_name:

@@ -1,4 +1,5 @@
 """Workspace capability boundary for every agent-controlled filesystem path."""
+
 from __future__ import annotations
 
 import os
@@ -31,9 +32,7 @@ def resolve_workspace_path(path: str | os.PathLike[str], *, allow_root: bool = T
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise WorkspaceViolation(
-            f"Path is outside the JAMES workspace ({root}): {path}"
-        ) from exc
+        raise WorkspaceViolation(f"Path is outside the JAMES workspace ({root}): {path}") from exc
     if not allow_root and resolved == root:
         raise WorkspaceViolation("The workspace root cannot be used for this operation.")
     return resolved

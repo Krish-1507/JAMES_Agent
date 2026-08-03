@@ -4,6 +4,7 @@ Secrets are generated with the operating system CSPRNG and stored with
 owner-only permissions where the platform supports them. Environment variables
 always take precedence so managed deployments can provide their own keys.
 """
+
 from __future__ import annotations
 
 import base64

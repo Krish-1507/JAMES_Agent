@@ -7,6 +7,7 @@ desktop dropdown, the onboarding wizard, and the README all agree.
 ``write_provider_config`` persists ``LLM_PROVIDER`` / ``LLM_MODEL`` back into
 the user's ``.env`` so a model choice survives across sessions.
 """
+
 from __future__ import annotations
 
 import os

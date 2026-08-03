@@ -4,6 +4,7 @@ Install with: pip install pvporcupine
 The engine is only constructed when ``WAKE_ENGINE=porcupine`` and the package
 is present; otherwise the Assistant falls back to continuous-listening mode.
 """
+
 from __future__ import annotations
 
 import logging

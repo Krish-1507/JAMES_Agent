@@ -4,6 +4,7 @@ A lightweight, dependency-free store (JSONL) with keyword/embedding retrieval.
 If ``sentence-transformers`` is installed it uses semantic search; otherwise it
 falls back to TF-style keyword overlap. Swap in Chroma/FAISS later if you want.
 """
+
 from __future__ import annotations
 
 import json

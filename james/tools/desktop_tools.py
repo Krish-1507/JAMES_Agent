@@ -4,6 +4,7 @@ These power JAMES's "computer-use": it can click, type and drive any desktop
 application the way a human would, and the ``computer_use`` tool runs a full
 screenshot -> describe -> act loop using a vision model (local-friendly).
 """
+
 from __future__ import annotations
 
 from ..core.workspace import resolve_workspace_path
@@ -35,7 +36,9 @@ def computer_use(instruction: str, max_steps: int = 12) -> ToolResult:
         return ToolResult(ok=False, output="Computer-use is not configured (no LLM provider).")
     model = settings.assistant.vision_model or None
     try:
-        result = run_computer_use(_context["llm"], instruction, max_steps=max(1, int(max_steps)), model=model)
+        result = run_computer_use(
+            _context["llm"], instruction, max_steps=max(1, int(max_steps)), model=model
+        )
         return ToolResult(ok=True, output=result)
     except Exception as exc:
         return ToolResult(ok=False, output=f"Computer-use failed: {exc}")
@@ -44,7 +47,12 @@ def computer_use(instruction: str, max_steps: int = 12) -> ToolResult:
 @tool(
     "screenshot_save",
     "Capture the screen and save it to a PNG file. Returns the path.",
-    {"path": {"type": "string", "description": "Destination PNG path (default workspace/screenshot.png)."}},
+    {
+        "path": {
+            "type": "string",
+            "description": "Destination PNG path (default workspace/screenshot.png).",
+        }
+    },
 )
 def screenshot_save(path: str = "") -> ToolResult:
     import pyautogui

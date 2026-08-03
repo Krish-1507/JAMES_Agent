@@ -1,4 +1,5 @@
 """Ed25519 signing and verification for JAMES plugin bundles."""
+
 from __future__ import annotations
 
 import base64
@@ -85,9 +86,9 @@ def sign_plugin_source(source: str, private_key_pem: bytes, key_id: str) -> str:
     unsigned[insert_at:insert_at] = [f"{MANIFEST_PREFIX}signing-key-id: {key_id}"]
     unsigned_source = "\n".join(unsigned).rstrip() + "\n"
     digest = plugin_digest(unsigned_source)
-    signature = base64.b64encode(
-        private_key.sign(canonical_plugin_bytes(unsigned_source))
-    ).decode("ascii")
+    signature = base64.b64encode(private_key.sign(canonical_plugin_bytes(unsigned_source))).decode(
+        "ascii"
+    )
     unsigned[insert_at + 1 : insert_at + 1] = [
         f"{MANIFEST_PREFIX}content-sha256: {digest}",
         f"{MANIFEST_PREFIX}signature: {signature}",

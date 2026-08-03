@@ -5,6 +5,7 @@
 * ``google``        — Google Speech Recognition (no key required).
 * ``none``          — falls back to typed text input.
 """
+
 from __future__ import annotations
 
 import tempfile

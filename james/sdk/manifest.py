@@ -5,6 +5,7 @@ It lives as a block of ``# manifest-*`` comment lines directly under the
 ``# JAMES-GENERATED-SKILL v1`` header, so the constrained runtime (which only
 permits imports and ``@tool`` functions at module scope) never sees it.
 """
+
 from __future__ import annotations
 
 import re
@@ -16,6 +17,7 @@ _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 _DEPENDENCY_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*(?:(?:==|>=|<=|~=|>|<)\d+\.\d+\.\d+)?$")
+
 
 @dataclass
 class PluginManifest:
@@ -61,12 +63,15 @@ def validate_manifest(manifest: PluginManifest) -> list[str]:
     if not isinstance(manifest.dependencies, list) or not all(
         isinstance(dep, str) and _DEPENDENCY_RE.match(dep) for dep in manifest.dependencies
     ):
-        issues.append("dependencies must be plugin names with optional semantic version constraints")
+        issues.append(
+            "dependencies must be plugin names with optional semantic version constraints"
+        )
     if manifest.content_sha256 and not re.fullmatch(r"[0-9a-f]{64}", manifest.content_sha256):
         issues.append("content_sha256 must be a lowercase SHA-256 digest")
     if bool(manifest.signature) != bool(manifest.signing_key_id):
         issues.append("signature and signing_key_id must be provided together")
     return issues
+
 
 def format_manifest(manifest: PluginManifest) -> str:
     """Render a manifest as the comment block written into a plugin file."""

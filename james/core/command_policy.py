@@ -1,4 +1,5 @@
 """Shared validation for commands executed without a shell."""
+
 from __future__ import annotations
 
 import os

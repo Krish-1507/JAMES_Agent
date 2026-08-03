@@ -9,6 +9,7 @@ The assistant runs in a worker thread; its activity streams into the UI:
   • history     — conversation history view
 A system tray icon lets you hide/show and quit.
 """
+
 from __future__ import annotations
 
 import threading
@@ -53,7 +54,7 @@ class _Worker(QThread):
     canvas = pyqtSignal(str)
     stream = pyqtSignal(str)
     tool_output = pyqtSignal(str, str)  # call_id, chunk
-    canvas_start = pyqtSignal(str, str)   # call_id, name
+    canvas_start = pyqtSignal(str, str)  # call_id, name
     canvas_done = pyqtSignal(str, str, str, bool)  # call_id, name, snippet, ok
 
     def __init__(self):
@@ -236,7 +237,9 @@ class OrbWindow(QMainWindow):
             configs = load_mcp_configs()
             self.mcp_list.clear()
             for cfg in configs:
-                self.mcp_list.addItem(f"{cfg.name} ({cfg.transport}) — {cfg.command or cfg.url or 'N/A'}")
+                self.mcp_list.addItem(
+                    f"{cfg.name} ({cfg.transport}) — {cfg.command or cfg.url or 'N/A'}"
+                )
         except Exception as exc:
             self.mcp_list.addItem(f"Error: {exc}")
 

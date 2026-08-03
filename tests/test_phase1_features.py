@@ -1,4 +1,5 @@
 """Tests for Phase 1: onboarding, sessions, and wake-word engine dispatch."""
+
 from __future__ import annotations
 
 import io
@@ -103,9 +104,7 @@ def test_onboarding_express_detects_anthropic_from_key(
 
     monkeypatch.setattr(ob, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(ob, "env_exists", lambda: False)
-    monkeypatch.setattr(
-        sys, "stdin", io.StringIO("sk-ant-123\n\n\nn\n")
-    )
+    monkeypatch.setattr(sys, "stdin", io.StringIO("sk-ant-123\n\n\nn\n"))
 
     env = ob.run_onboarding()
     content = env.read_text(encoding="utf-8")
@@ -122,9 +121,7 @@ def test_onboarding_express_accepts_detected_defaults(
 
     monkeypatch.setattr(ob, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(ob, "env_exists", lambda: False)
-    monkeypatch.setattr(
-        sys, "stdin", io.StringIO("sk-proj-openaikey123\n\n\nn\n")
-    )
+    monkeypatch.setattr(sys, "stdin", io.StringIO("sk-proj-openaikey123\n\n\nn\n"))
 
     env = ob.run_onboarding()
     content = env.read_text(encoding="utf-8")
@@ -181,7 +178,9 @@ def test_detect_provider_from_key_format() -> None:
     assert ob.detect_provider("random-key-abc") is None
 
 
-def test_setup_cli_runs_even_when_env_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_setup_cli_runs_even_when_env_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import james.onboarding as ob
 
     monkeypatch.setattr(ob, "PROJECT_ROOT", tmp_path)
@@ -206,7 +205,6 @@ def test_voice_loop_porcupine_falls_back_when_missing(
     monkeypatch.setattr(settings.assistant, "wake_engine", "porcupine")
     if importlib.util.find_spec("pvporcupine") is not None:
         pytest.skip("pvporcupine installed — cannot test fallback")
-
 
     a = _make_assistant(isolated_workspace)
     a.speak = lambda text: None
@@ -237,7 +235,6 @@ def test_wake_engine_none_listens_continuously(
 ) -> None:
     monkeypatch.setattr(settings.assistant, "wake_engine", "none")
 
-
     a = _make_assistant(isolated_workspace)
     a.speak = lambda text: None
     a.log = type("_Log", (), {"warning": lambda self, *x, **k: None})()
@@ -253,16 +250,13 @@ def test_wake_engine_always_requires_wake_word(
 ) -> None:
     monkeypatch.setattr(settings.assistant, "wake_engine", "always")
 
-
     a = _make_assistant(isolated_workspace)
     a.speak = lambda text: None
     a.log = type("_Log", (), {"warning": lambda self, *x, **k: None})()
     handled = []
     a.handle_turn = lambda text: handled.append(text)
 
-    a.stt = _terminating_stt(
-        f"{settings.assistant.wake_word} set a timer for 5 minutes"
-    )
+    a.stt = _terminating_stt(f"{settings.assistant.wake_word} set a timer for 5 minutes")
     with pytest.raises(KeyboardInterrupt):
         a._voice_loop_wake_word()
     assert handled == ["set a timer for 5 minutes"]

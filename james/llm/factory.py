@@ -4,6 +4,7 @@ Supports an ordered **failover**: if the primary provider errors, JAMES
 automatically retries the next one, so a flaky API or rate limit never kills a
 task (this is what OpenClaw calls "model failover").
 """
+
 from __future__ import annotations
 
 from ..config import LLMSettings
@@ -23,7 +24,18 @@ _BASE_URLS = {
 }
 
 # OpenAI-compatible providers. Anything here can also be reached via `custom`.
-_OPENAI_COMPATIBLE = ("openai", "openrouter", "groq", "mistral", "xai", "deepseek", "together", "cerebras", "cohere", "custom")
+_OPENAI_COMPATIBLE = (
+    "openai",
+    "openrouter",
+    "groq",
+    "mistral",
+    "xai",
+    "deepseek",
+    "together",
+    "cerebras",
+    "cohere",
+    "custom",
+)
 
 
 def _build_one(provider: str, model: str, settings: LLMSettings) -> LLMProvider:
@@ -75,8 +87,17 @@ def _is_permanent_error(exc: Exception) -> bool:
     if "Authentication" in etype or "Permission" in etype or "Authorization" in etype:
         return True
     msg = str(exc).lower()
-    markers = ("401", "403", "authentication", "api key", "incorrect api",
-               "permission", "forbidden", "unauthorized", "invalid api key")
+    markers = (
+        "401",
+        "403",
+        "authentication",
+        "api key",
+        "incorrect api",
+        "permission",
+        "forbidden",
+        "unauthorized",
+        "invalid api key",
+    )
     return any(m in msg for m in markers)
 
 

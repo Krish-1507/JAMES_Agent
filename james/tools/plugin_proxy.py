@@ -1,4 +1,5 @@
 """Out-of-process plugin discovery proxies."""
+
 from __future__ import annotations
 
 import ast

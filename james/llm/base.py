@@ -5,6 +5,7 @@ rest of the system never needs to know which provider is behind it. Every
 provider returns a :class:`LLMResponse` containing text content and (optionally)
 structured tool calls.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

@@ -5,6 +5,7 @@ web — is expressed as a :class:`Tool`. The agent loop discovers tools via the
 registry, exposes their JSON schemas to the LLM, and executes whatever the
 model decides to call.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -69,21 +70,33 @@ class FunctionTool(Tool):
             param_type = param_schema.get("type", "string")
             if param_type == "integer":
                 if not isinstance(value, int):
-                    errors.append(f"Parameter '{param_name}' must be an integer, got {type(value).__name__}")
+                    errors.append(
+                        f"Parameter '{param_name}' must be an integer, got {type(value).__name__}"
+                    )
             elif param_type == "number":
                 if not isinstance(value, int | float):
-                    errors.append(f"Parameter '{param_name}' must be a number, got {type(value).__name__}")
+                    errors.append(
+                        f"Parameter '{param_name}' must be a number, got {type(value).__name__}"
+                    )
             elif param_type == "boolean":
                 if not isinstance(value, bool):
-                    errors.append(f"Parameter '{param_name}' must be a boolean, got {type(value).__name__}")
+                    errors.append(
+                        f"Parameter '{param_name}' must be a boolean, got {type(value).__name__}"
+                    )
             elif param_type == "string":
                 if not isinstance(value, str):
-                    errors.append(f"Parameter '{param_name}' must be a string, got {type(value).__name__}")
+                    errors.append(
+                        f"Parameter '{param_name}' must be a string, got {type(value).__name__}"
+                    )
             elif param_type == "array":
                 if not isinstance(value, list):
-                    errors.append(f"Parameter '{param_name}' must be an array, got {type(value).__name__}")
+                    errors.append(
+                        f"Parameter '{param_name}' must be an array, got {type(value).__name__}"
+                    )
             elif param_type == "object" and not isinstance(value, dict):
-                errors.append(f"Parameter '{param_name}' must be an object, got {type(value).__name__}")
+                errors.append(
+                    f"Parameter '{param_name}' must be an object, got {type(value).__name__}"
+                )
             max_length = param_schema.get("maxLength")
             if max_length is not None and isinstance(value, str) and len(value) > max_length:
                 errors.append(f"Parameter '{param_name}' exceeds maximum length of {max_length}")
@@ -117,7 +130,9 @@ class FunctionTool(Tool):
         yield result
 
 
-def tool(name: str, description: str, parameters: dict[str, Any], required: list[str] | None = None):
+def tool(
+    name: str, description: str, parameters: dict[str, Any], required: list[str] | None = None
+):
     def decorator(func):
         return FunctionTool(func, name, description, parameters, required or [])
 

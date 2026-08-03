@@ -4,6 +4,7 @@ This is JAMES's answer to Hermes's subagent delegation, with a twist: a single
 call can fan out *multiple* independent subtasks across threads and combine the
 results, so one request can parallelize real work.
 """
+
 from __future__ import annotations
 
 import concurrent.futures

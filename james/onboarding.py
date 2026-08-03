@@ -6,6 +6,7 @@ It never writes secrets to the repo — only to ``.env``, which is gitignored.
 Express flow: paste an API key and JAMES detects the provider from its format,
 so a typical setup is just "paste key -> Enter -> Enter".
 """
+
 from __future__ import annotations
 
 import os
@@ -134,9 +135,7 @@ def _prompt_credentials() -> tuple[str, str, str, str]:
 
     Returns ``(provider, base_url, model, api_key)``.
     """
-    api_key = _ask(
-        "Paste your API key (or Enter to choose provider manually)"
-    )
+    api_key = _ask("Paste your API key (or Enter to choose provider manually)")
     detected = detect_provider(api_key)
     if detected:
         default_model = DEFAULT_MODELS[detected]

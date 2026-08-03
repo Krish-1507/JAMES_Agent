@@ -3,6 +3,7 @@
 Covers the manifest schema, scaffolding, validation, loading, marketplace
 metadata flow, and the public authoring surface (imports from ``james.sdk``).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -81,13 +82,17 @@ def test_create_plugin_refuses_overwrite(plugin_dir: Path) -> None:
 def test_load_plugin_returns_registered_tool(plugin_dir: Path) -> None:
     path = create_plugin("greeter", description="Greet someone.", directory=plugin_dir)
     module = load_plugin(path)
-    found = [value.name for value in vars(module).values() if type(value).__name__ == "FunctionTool"]
+    found = [
+        value.name for value in vars(module).values() if type(value).__name__ == "FunctionTool"
+    ]
     assert found == ["greeter"]
 
 
 # --- validation ------------------------------------------------------------
 def test_validate_plugin_rejects_missing_header() -> None:
-    issues = validate_plugin("from james.sdk import tool\n@tool('x','x',{},required=[])\ndef x():\n    pass\n")
+    issues = validate_plugin(
+        "from james.sdk import tool\n@tool('x','x',{},required=[])\ndef x():\n    pass\n"
+    )
     assert any("header" in issue for issue in issues)
 
 
@@ -141,7 +146,14 @@ def test_sdk_skill_loads_through_constrained_runtime(plugin_dir: Path) -> None:
 def test_marketplace_bundle_uses_manifest_metadata(
     plugin_dir: Path, marketplace_file: Path
 ) -> None:
-    create_plugin("meta", description="From manifest.", author="Bob", version="2.3.4", tags=["x"], directory=plugin_dir)
+    create_plugin(
+        "meta",
+        description="From manifest.",
+        author="Bob",
+        version="2.3.4",
+        tags=["x"],
+        directory=plugin_dir,
+    )
     from james.tools.marketplace import publish_skill
 
     result = publish_skill.run(name="meta")

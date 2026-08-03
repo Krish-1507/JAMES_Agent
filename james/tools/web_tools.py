@@ -1,4 +1,5 @@
 """Web tools: search the internet and read pages — JAMES's eyes on the web."""
+
 from __future__ import annotations
 
 import re
@@ -62,7 +63,10 @@ def web_search(query: str, max_results: int = 5) -> ToolResult:
     "Fetch a web page and extract its readable text content (articles, docs, etc.).",
     {
         "url": {"type": "string", "description": "Fully-qualified URL to read."},
-        "max_chars": {"type": "integer", "description": "Cap on returned characters (default 8000)."},
+        "max_chars": {
+            "type": "integer",
+            "description": "Cap on returned characters (default 8000).",
+        },
     },
     required=["url"],
 )

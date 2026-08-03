@@ -1,4 +1,5 @@
 """Professional PyQt5 desktop shell with explicit safety approvals."""
+
 from __future__ import annotations
 
 import json
@@ -48,10 +49,14 @@ def _redact(value):
         result = {}
         for key, item in value.items():
             lowered = str(key).lower()
-            result[key] = "***REDACTED***" if any(
-                marker in lowered
-                for marker in ("token", "secret", "password", "api_key", "authorization")
-            ) else _redact(item)
+            result[key] = (
+                "***REDACTED***"
+                if any(
+                    marker in lowered
+                    for marker in ("token", "secret", "password", "api_key", "authorization")
+                )
+                else _redact(item)
+            )
         return result
     if isinstance(value, list):
         return [_redact(item) for item in value]
@@ -98,11 +103,15 @@ class _ApprovalDialog(QDialog):
         title = QLabel(f"Allow {request.name}?")
         title.setObjectName("dialogTitle")
         title.setWordWrap(True)
-        risk = QLabel(self._RISKS.get(request.name, "This action can change local or external state."))
+        risk = QLabel(
+            self._RISKS.get(request.name, "This action can change local or external state.")
+        )
         risk.setWordWrap(True)
         boundary = QLabel("Scope: the configured JAMES workspace. Approval applies once.")
         boundary.setObjectName("muted")
-        details = QPlainTextEdit(json.dumps(_redact(request.arguments), indent=2, ensure_ascii=False))
+        details = QPlainTextEdit(
+            json.dumps(_redact(request.arguments), indent=2, ensure_ascii=False)
+        )
         details.setReadOnly(True)
         details.setObjectName("approvalDetails")
         buttons = QDialogButtonBox()
@@ -167,7 +176,9 @@ class _Worker(QThread):
         self._assistant.set_tool_hooks(self._on_tool, self._on_tool_start, self._on_tool_pending)
 
     def _on_tool_pending(self, call_id: str, name: str, arguments: dict) -> None:
-        self.event.emit({"type": "tool_pending", "call_id": call_id, "name": name, "args": arguments})
+        self.event.emit(
+            {"type": "tool_pending", "call_id": call_id, "name": name, "args": arguments}
+        )
 
     def _on_tool_start(self, call_id: str, name: str, arguments: dict) -> None:
         self.event.emit({"type": "tool_start", "call_id": call_id, "name": name, "args": arguments})
@@ -342,7 +353,9 @@ class DesktopWindow(QMainWindow):
         self.chat_transcript.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.chat_transcript.setWordWrap(True)
         self.chat_transcript.setObjectName("chatTranscript")
-        self.chat_transcript.addItem("JAMES  ·  Ready when you are. Dangerous actions always ask first.")
+        self.chat_transcript.addItem(
+            "JAMES  ·  Ready when you are. Dangerous actions always ask first."
+        )
         provider = settings.llm.provider
         api_key = getattr(settings.llm, f"{provider}_api_key", "")
         if provider != "custom" and not api_key:
@@ -370,7 +383,9 @@ class DesktopWindow(QMainWindow):
         return page
 
     def _activity_page(self) -> QWidget:
-        page, layout = self._page_header("Activity", "A transparent ledger of every tool JAMES uses.")
+        page, layout = self._page_header(
+            "Activity", "A transparent ledger of every tool JAMES uses."
+        )
         self.activity = QListWidget()
         self.activity.setObjectName("activityList")
         self.activity.itemDoubleClicked.connect(self._show_activity_details)
@@ -398,7 +413,9 @@ class DesktopWindow(QMainWindow):
         return page
 
     def _integrations_page(self) -> QWidget:
-        page, layout = self._page_header("Integrations", "Configured MCP servers and model connections.")
+        page, layout = self._page_header(
+            "Integrations", "Configured MCP servers and model connections."
+        )
         self.mcp_list = QListWidget()
         self.mcp_list.setObjectName("mcpServerList")
         layout.addWidget(self.mcp_list, 1)
@@ -508,8 +525,12 @@ class DesktopWindow(QMainWindow):
                 item = QListWidgetItem()
                 self.activity.addItem(item)
             ok = bool(event.get("ok"))
-            item.setText(f"{'Done' if ok else 'Failed'}  ·  {event.get('name')}  ·  {str(event.get('result', ''))[:160]}")
-            item.setText(f"{'Done' if ok else 'Failed'}  |  {event.get('name')}  |  {str(event.get('result', ''))[:160]}")
+            item.setText(
+                f"{'Done' if ok else 'Failed'}  ·  {event.get('name')}  ·  {str(event.get('result', ''))[:160]}"
+            )
+            item.setText(
+                f"{'Done' if ok else 'Failed'}  |  {event.get('name')}  |  {str(event.get('result', ''))[:160]}"
+            )
             item.setData(Qt.UserRole, event)
             item.setForeground(QColor("#58c69a" if ok else "#e36464"))
 
@@ -545,14 +566,15 @@ class DesktopWindow(QMainWindow):
             if not configs:
                 self.mcp_list.addItem("No MCP servers configured.")
             for config in configs:
-                self.mcp_list.addItem(f"{config.name}  ·  {config.transport}  ·  {config.command or config.url or 'ready'}")
+                self.mcp_list.addItem(
+                    f"{config.name}  ·  {config.transport}  ·  {config.command or config.url or 'ready'}"
+                )
         except Exception as exc:
             self.mcp_list.addItem(f"Could not load MCP configuration: {exc}")
 
     def _log(self, text: str) -> None:
         self.diagnostics.setVisible(True)
         self.diagnostics.appendPlainText(text)
-
 
     def _show_activity_details(self, item: QListWidgetItem | None) -> None:
         if item is None:
