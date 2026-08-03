@@ -259,14 +259,32 @@ Core modules:
 
 ## Roadmap to v1
 
-Before recommending JAMES to general users, the project needs:
+JAMES is in **alpha** and should not be treated as production software yet.
+Before it is recommended for general users, the following gaps remain open:
 
-- Explicit GUI approval prompts for dangerous calls.
-- Process/container isolation for high-risk tool execution.
-- Workspace-scoped filesystem permissions.
-- Signed releases, dependency/security scanning, and CI across Windows, macOS, and Linux.
-- Plugin signing and dependency metadata (the SDK manifest is in place; signing is not).
-- A guided onboarding flow and clearer recovery/undo behavior.
+### Safety (highest priority)
+- [ ] **Explicit GUI approval prompts for dangerous calls.** The desktop app
+      currently fails closed for dangerous actions because it has no dedicated
+      confirmation handler; the terminal CLI prompts, but the GUI does not.
+      ([docs/security.md](docs/security.md))
+- [ ] **Process/container isolation for high-risk tool execution.** Shell
+      commands, file deletion, scheduled commands, and trusted plugins run
+      in-process today.
+- [ ] **Workspace-scoped filesystem permissions.** The agent can currently
+      reach outside its bounded workspace.
+
+### Release engineering
+- [ ] **Signed releases and CI across Windows, macOS, and Linux.** CI runs on
+  Windows and Linux today; add macOS, release automation, and signed artifacts.
+- [ ] **Dependency/security scanning.** No SCA/SAST pipeline is wired in yet.
+
+### Plugin & marketplace trust
+- [ ] **Plugin signing + dependency metadata.** The SDK manifest is in place;
+  cryptographic signing and dependency resolution are not.
+
+### Usability & recovery
+- [ ] **Guided onboarding and clearer recovery/undo behavior.** There is no
+  guided recovery flow for mistakes or destructive actions.
 
 The near-term product focus is a trustworthy desktop workflow: organize a bounded workspace, summarize local documents, and produce a reviewable result—with the user in control throughout.
 

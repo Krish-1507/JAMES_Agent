@@ -27,6 +27,14 @@ The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contai
 
 JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, voice providers, memory, encrypted history, optional offline operation, a constrained Skill Forge, and a documented plugin SDK (`james.sdk`).
 
+### Promotion readiness
+
+JAMES is **alpha**. Before recommending it to general users the project still needs:
+explicit GUI approval prompts for dangerous calls, process/container isolation
+for high-risk tool execution, workspace-scoped filesystem permissions, signed
+releases with CI across Windows/macOS/Linux, plugin signing, and a guided
+recovery/undo flow. See the [README roadmap](https://github.com/Krish-1507/JAMES_Agent#roadmap-to-v1).
+
 ## Interfaces and model selection
 
 - **Terminal CLI** (`james --text`) uses an OpenCode-style chat UI: ASCII logo,
