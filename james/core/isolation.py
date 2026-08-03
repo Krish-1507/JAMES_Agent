@@ -4,12 +4,13 @@ The broker uses Python's ``spawn`` context so risky work never executes in the
 desktop process. Payloads are JSON-like values and the child exposes only named
 operations; arbitrary callables or source code cannot cross the boundary.
 """
+
 from __future__ import annotations
 
 import multiprocessing
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 - required to spawn isolated worker commands
 import time
 from pathlib import Path
 from queue import Empty
@@ -49,7 +50,7 @@ def _execute(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     _limit_child()
     if operation == "command":
         args = payload["args"]
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B603 - argv list, shell=False, policy-checked before dispatch
             args,
             shell=False,
             cwd=payload["workspace"],

@@ -3,6 +3,7 @@
 Provides tools to measure agent performance on tasks, track success rates,
 and generate reports. Run with:  python -m james --eval
 """
+
 from __future__ import annotations
 
 import json
@@ -48,12 +49,14 @@ class Evaluator:
         max_iterations: int = 20,
         timeout: int = 120,
     ) -> TaskResult:
-        task_id = f"eval_{int(time.time()*1000)}"
+        task_id = f"eval_{int(time.time() * 1000)}"
         start = time.time()
         try:
             result, _ = agent_run_fn(description, max_iterations=max_iterations)
             duration = time.time() - start
-            success = bool(result and not result.startswith("Error") and not result.startswith("I reached"))
+            success = bool(
+                result and not result.startswith("Error") and not result.startswith("I reached")
+            )
             tool_calls = 0
             iterations = 0
             return TaskResult(
@@ -101,7 +104,7 @@ class Evaluator:
 
     def summary(self) -> dict[str, Any]:
         if not self._results:
-            return {"total": 0, "passed": 0, "failed": 0, "pass_rate": 0.0}
+            return {"total": 0, "passed": 0, "failed": 0, "pass_rate": 0.0}  # nosec B105 - float literal, not a credential
         passed = sum(1 for r in self._results if r.success)
         total = len(self._results)
         return {

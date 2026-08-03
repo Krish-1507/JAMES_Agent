@@ -261,7 +261,10 @@ Core modules:
 ## Roadmap to v1
 
 JAMES is in **alpha** and should not be treated as production software yet.
-Before it is recommended for general users, the following gaps remain open:
+The promotion-readiness checklist below is **complete**; the remaining gaps
+before JAMES can be recommended to general users are listed in the next section.
+
+### Promotion-readiness checklist (done)
 
 ### Safety (highest priority)
 - [x] **Explicit GUI approval prompts for dangerous calls.** One-time approvals are deny-by-default and redact sensitive arguments.
@@ -270,13 +273,28 @@ Before it is recommended for general users, the following gaps remain open:
 
 ### Release engineering
 - [x] **Signed release artifacts.** Tag builds are signed through Sigstore using GitHub OIDC and attached to releases. CI currently covers Windows and Linux; macOS coverage remains planned.
-- [x] **Dependency/security scanning.** `pip-audit`, Bandit, and CodeQL run in the security workflow.
+- [x] **Dependency/security scanning.** `pip-audit`, Bandit, and CodeQL run in the security workflow. Bandit now runs clean with no suppressions or baseline.
 
 ### Plugin & marketplace trust
 - [x] **Plugin signing + dependency metadata.** Manifests support Ed25519 signatures, content digests, key IDs, dependencies, and cycle/missing-dependency rejection.
 
 ### Usability & recovery
 - [x] **Guided onboarding and clearer recovery/undo behavior.** Desktop empty states guide setup, and recoverable deletion includes a dedicated Recovery view.
+
+### Remaining before general release
+- [ ] **Broader automated test coverage.** The suite exercises every security boundary
+      (egress guard, worker isolation, agent confirmation, skill runtime, plugin
+      signing) and the core agent/assistant paths, but UI, voice, browser, and
+      document tools still have thin coverage. Target ≥80% on security-critical
+      modules before recommending JAMES to non-technical users.
+- [ ] **macOS signed artifacts.** The test matrix now covers macOS (Ubuntu +
+      Windows + macOS across Python 3.10-3.12); OIDC-signed release artifacts
+      still build on Linux only, which is fine because the wheel is a pure-Python
+      `py3-none-any` build shared by all platforms.
+- [ ] **Enterprise policy management.** Centralized allow/deny and audit policy is
+      explicitly future work; single-user `.env` configuration remains the model.
+- [ ] **Container/VM isolation.** Spawned workers are process isolation, not a
+      sandbox boundary; container or VM execution remains optional defense in depth.
 
 The near-term product focus is a trustworthy desktop workflow: organize a bounded workspace, summarize local documents, and produce a reviewable result—with the user in control throughout.
 

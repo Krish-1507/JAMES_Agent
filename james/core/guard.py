@@ -13,6 +13,7 @@ Additionally, httpx, http.client, urllib.request, urllib3, and requests are
 patched to block non-loopback requests at the library level, covering cases
 where socket monkey-patching alone is bypassed by those libraries.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -51,7 +52,9 @@ def _is_loopback(host) -> bool:
     if host is None:
         return False
     h = str(host).strip().lower()
-    if h in ("localhost", "127.0.0.1", "::1", "0.0.0.0", "::"):
+    # Host classification for the egress guard — not a socket bind(), so the
+    # wildcard addresses below are intentionally treated as "local".
+    if h in ("localhost", "127.0.0.1", "::1", "0.0.0.0", "::"):  # nosec B104
         return True
     try:
         return ipaddress.ip_address(h).is_loopback
@@ -81,7 +84,7 @@ def _audit(host, port, allowed: bool) -> None:
         )
         with open(settings.assistant.egress_audit_log, "a", encoding="utf-8") as f:
             f.write(line)
-    except Exception:
+    except Exception:  # nosec B110 - auditing must never break a connection decision
         pass
 
 
@@ -114,6 +117,7 @@ def _guarded_create(*args, **kwargs):
 
 def _guarded_httpx_request(self, url, **kwargs):
     from urllib.parse import urlparse
+
     parsed = urlparse(str(url))
     host = parsed.hostname
     if host and not _is_loopback(host):
@@ -123,7 +127,7 @@ def _guarded_httpx_request(self, url, **kwargs):
 
 
 def _guarded_httpx_send(self, request, **kwargs):
-    host = request.url.host if hasattr(request.url, 'host') else None
+    host = request.url.host if hasattr(request.url, "host") else None
     if host and not _is_loopback(host):
         _audit(host, request.url.port or 443, False)
         raise BlockedEgress(f"Blocked egress to {host} (offline mode, httpx)")
@@ -132,6 +136,7 @@ def _guarded_httpx_send(self, request, **kwargs):
 
 def _guarded_http_client_request(self, url, **kwargs):
     from urllib.parse import urlparse
+
     parsed = urlparse(str(url))
     host = parsed.hostname
     if host and not _is_loopback(host):
@@ -142,6 +147,7 @@ def _guarded_http_client_request(self, url, **kwargs):
 
 def _guarded_urllib_request(url, **kwargs):
     from urllib.parse import urlparse
+
     parsed = urlparse(str(url))
     host = parsed.hostname
     if host and not _is_loopback(host):
@@ -152,6 +158,7 @@ def _guarded_urllib_request(url, **kwargs):
 
 def _guarded_urllib3_request(self, url, **kwargs):
     from urllib.parse import urlparse
+
     parsed = urlparse(str(url))
     host = parsed.hostname
     if host and not _is_loopback(host):
@@ -162,6 +169,7 @@ def _guarded_urllib3_request(self, url, **kwargs):
 
 def _guarded_requests_request(self, url, **kwargs):
     from urllib.parse import urlparse
+
     parsed = urlparse(str(url))
     host = parsed.hostname
     if host and not _is_loopback(host):
@@ -172,7 +180,14 @@ def _guarded_requests_request(self, url, **kwargs):
 
 def install_offline_guard() -> None:
     """Monkey-patch the socket layer to enforce offline mode. Idempotent."""
-    global _INSTALLED, _orig_httpx_request, _orig_httpx_send, _orig_http_client_request, _orig_urllib_request, _orig_urllib3_request, _orig_requests_request
+    global \
+        _INSTALLED, \
+        _orig_httpx_request, \
+        _orig_httpx_send, \
+        _orig_http_client_request, \
+        _orig_urllib_request, \
+        _orig_urllib3_request, \
+        _orig_requests_request
     with _LOCK:
         if _INSTALLED:
             return
@@ -189,7 +204,7 @@ def install_offline_guard() -> None:
             if not _orig_httpx_send:
                 _orig_httpx_send = httpx.AsyncClient.send
                 httpx.AsyncClient.send = _guarded_httpx_send
-        except Exception:
+        except Exception:  # nosec B110 - optional patch; guard works without it
             pass
 
         try:
@@ -198,7 +213,7 @@ def install_offline_guard() -> None:
             if not _orig_http_client_request:
                 _orig_http_client_request = http.client.HTTPConnection.request
                 http.client.HTTPConnection.request = _guarded_http_client_request
-        except Exception:
+        except Exception:  # nosec B110 - optional patch; guard works without it
             pass
 
         try:
@@ -207,7 +222,7 @@ def install_offline_guard() -> None:
             if not _orig_urllib_request:
                 _orig_urllib_request = urllib.request.urlopen
                 urllib.request.urlopen = _guarded_urllib_request
-        except Exception:
+        except Exception:  # nosec B110 - optional patch; guard works without it
             pass
 
         try:
@@ -216,7 +231,7 @@ def install_offline_guard() -> None:
             if not _orig_urllib3_request:
                 _orig_urllib3_request = urllib3.PoolManager.request
                 urllib3.PoolManager.request = _guarded_urllib3_request
-        except Exception:
+        except Exception:  # nosec B110 - optional patch; guard works without it
             pass
 
         try:
@@ -225,7 +240,7 @@ def install_offline_guard() -> None:
             if not _orig_requests_request:
                 _orig_requests_request = requests.Session.request
                 requests.Session.request = _guarded_requests_request
-        except Exception:
+        except Exception:  # nosec B110 - optional patch; guard works without it
             pass
 
         _INSTALLED = True

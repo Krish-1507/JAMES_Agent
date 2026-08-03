@@ -5,10 +5,12 @@ python-dotenv). Supports encrypted `.env.gpg` files for protecting API keys
 at rest. Every value is overridable so the project works out-of-the-box
 in text-only mode without any API keys, and scales up to any provider.
 """
+
 from __future__ import annotations
 
 import os
-import subprocess
+import shutil
+import subprocess  # nosec B404 - only used for optional .env.gpg decryption
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,9 +23,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _decrypt_env_gpg(env_gpg_path: Path) -> dict[str, str]:
+    gpg_bin = shutil.which("gpg")
+    if not gpg_bin:
+        return {}
     try:
         result = subprocess.run(
-            ["gpg", "--batch", "--quiet", "--decrypt", str(env_gpg_path)],
+            [gpg_bin, "--batch", "--quiet", "--decrypt", str(env_gpg_path)],  # nosec B603 - argv list, no shell
             capture_output=True,
             text=True,
             timeout=10,
@@ -55,7 +60,7 @@ def _load_env_file() -> None:
             from dotenv import load_dotenv
 
             load_dotenv(str(env_path))
-        except Exception:
+        except Exception:  # nosec B110 - best-effort dotenv load; plain .env still works
             pass
         _warn_env_permissions(env_path)
 
@@ -77,7 +82,7 @@ def _load_tool_permissions() -> None:
                     settings.assistant.denied_tools.append(tool_name)
                 elif value == "true" and tool_name in settings.assistant.denied_tools:
                     settings.assistant.denied_tools.remove(tool_name)
-    except Exception:
+    except Exception:  # nosec B110 - best-effort env permission reconciliation
         pass
 
 
@@ -100,7 +105,7 @@ def _warn_env_permissions(env_path: Path) -> None:
                 "API keys may be exposed. Run: chmod 600 .env",
                 stacklevel=3,
             )
-    except Exception:
+    except Exception:  # nosec B110 - best-effort warning; safety default is unchanged
         pass
 
 
@@ -154,7 +159,9 @@ class LLMSettings:
     timeout: int = field(default_factory=lambda: _int("LLM_TIMEOUT", 120))
     # Ordered failover list: "provider[:model]" entries tried after the primary on error.
     failover: list[str] = field(
-        default_factory=lambda: [s.strip() for s in _env("LLM_FAILOVER", "").split(",") if s.strip()]
+        default_factory=lambda: [
+            s.strip() for s in _env("LLM_FAILOVER", "").split(",") if s.strip()
+        ]
     )
 
     # provider keys / endpoints
@@ -169,7 +176,9 @@ class LLMSettings:
     together_api_key: str = field(default_factory=lambda: _env("TOGETHER_API_KEY"))
     cerebras_api_key: str = field(default_factory=lambda: _env("CEREBRAS_API_KEY"))
     cohere_api_key: str = field(default_factory=lambda: _env("COHERE_API_KEY"))
-    custom_base_url: str = field(default_factory=lambda: _env("CUSTOM_BASE_URL", "http://localhost:11434/v1"))
+    custom_base_url: str = field(
+        default_factory=lambda: _env("CUSTOM_BASE_URL", "http://localhost:11434/v1")
+    )
     custom_api_key: str = field(default_factory=lambda: _env("CUSTOM_API_KEY"))
     openrouter_referer: str = field(default_factory=lambda: _env("OPENROUTER_HTTP_REFERER"))
     openrouter_site: str = field(default_factory=lambda: _env("OPENROUTER_SITE_NAME", "JAMES"))
@@ -201,8 +210,12 @@ class VoiceSettings:
     tts_provider: str = field(default_factory=lambda: _env("TTS_PROVIDER", "edge").lower())
     whisper_api_key: str = field(default_factory=lambda: _env("WHISPER_API_KEY"))
     elevenlabs_api_key: str = field(default_factory=lambda: _env("ELEVENLABS_API_KEY"))
-    elevenlabs_voice_id: str = field(default_factory=lambda: _env("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"))
-    mic_device_index: int | None = field(default_factory=lambda: (int(_env("MIC_DEVICE_INDEX")) if _env("MIC_DEVICE_INDEX") else None))
+    elevenlabs_voice_id: str = field(
+        default_factory=lambda: _env("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+    )
+    mic_device_index: int | None = field(
+        default_factory=lambda: int(_env("MIC_DEVICE_INDEX")) if _env("MIC_DEVICE_INDEX") else None
+    )
 
 
 @dataclass
@@ -213,17 +226,23 @@ class AssistantSettings:
     system_prompt: str = field(default_factory=lambda: _env("SYSTEM_PROMPT"))
     workspace_dir: Path = field(default_factory=lambda: _path("WORKSPACE_DIR", "./workspace"))
     log_level: str = field(default_factory=lambda: _env("LOG_LEVEL", "INFO").upper())
-    confirm_dangerous_actions: bool = field(default_factory=lambda: _bool("CONFIRM_DANGEROUS_ACTIONS", True))
+    confirm_dangerous_actions: bool = field(
+        default_factory=lambda: _bool("CONFIRM_DANGEROUS_ACTIONS", True)
+    )
 
     # Safety / capability tiers
     # mode: "standard" (read-only + safe tools) or "full" (shell/delete/apps)
     mode: str = field(default_factory=lambda: _env("JAMES_MODE", "standard").lower())
     dry_run: bool = field(default_factory=lambda: _bool("DRY_RUN", False))
-    audit_log: Path = field(default_factory=lambda: _path("AUDIT_LOG", "./workspace/james_audit.log"))
+    audit_log: Path = field(
+        default_factory=lambda: _path("AUDIT_LOG", "./workspace/james_audit.log")
+    )
 
     # Memory / RAG
     memory_enabled: bool = field(default_factory=lambda: _bool("MEMORY_ENABLED", True))
-    memory_file: Path = field(default_factory=lambda: _path("MEMORY_FILE", "./workspace/memory.jsonl"))
+    memory_file: Path = field(
+        default_factory=lambda: _path("MEMORY_FILE", "./workspace/memory.jsonl")
+    )
     # Semantic memory uses sentence-transformers when installed; set to "false" to force keyword fallback.
     memory_embedding: bool = field(default_factory=lambda: _bool("MEMORY_EMBEDDING", True))
 
@@ -242,7 +261,11 @@ class AssistantSettings:
     auto_file_manager: bool = field(default_factory=lambda: _bool("AUTO_FILE_MANAGER", False))
     file_manager_interval: int = field(default_factory=lambda: _int("FILE_MANAGER_INTERVAL", 1800))
     file_manager_scopes: list[str] = field(
-        default_factory=lambda: [s.strip() for s in _env("FILE_MANAGER_SCOPES", "Desktop,Documents,Downloads").split(",") if s.strip()]
+        default_factory=lambda: [
+            s.strip()
+            for s in _env("FILE_MANAGER_SCOPES", "Desktop,Documents,Downloads").split(",")
+            if s.strip()
+        ]
     )
 
     # Privacy-certified local mode: block ALL non-loopback network egress and audit every attempt.
@@ -256,14 +279,20 @@ class AssistantSettings:
     # When set, only tools in allowed_tools are permitted (denied_tools is ignored).
     # Can also be configured in .env as TOOL_<name>=true/false
     allowed_tools: list[str] = field(
-        default_factory=lambda: [s.strip() for s in _env("ALLOWED_TOOLS", "").split(",") if s.strip()]
+        default_factory=lambda: [
+            s.strip() for s in _env("ALLOWED_TOOLS", "").split(",") if s.strip()
+        ]
     )
     denied_tools: list[str] = field(
-        default_factory=lambda: [s.strip() for s in _env("DENIED_TOOLS", "").split(",") if s.strip()]
+        default_factory=lambda: [
+            s.strip() for s in _env("DENIED_TOOLS", "").split(",") if s.strip()
+        ]
     )
 
     history_file: Path = field(
-        default_factory=lambda: _path("CONVERSATION_HISTORY", "./workspace/conversation_history.enc")
+        default_factory=lambda: _path(
+            "CONVERSATION_HISTORY", "./workspace/conversation_history.enc"
+        )
     )
     # Vision model for computer-use / image understanding (defaults to the main LLM model).
     vision_model: str = field(default_factory=lambda: _env("VISION_MODEL", ""))

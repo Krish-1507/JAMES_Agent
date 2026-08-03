@@ -17,6 +17,9 @@ htmlcov/
 .pytest_cache/
 .ruff_cache/
 
+# Docs site (mkdocs output)
+site/
+
 
 # Environments
 .env

@@ -1,10 +1,12 @@
 """Text-to-speech providers."""
+
 from __future__ import annotations
 
 import asyncio
 import os
 import platform
-import subprocess
+import shutil
+import subprocess  # nosec B404 - required for local audio playback fallbacks
 import tempfile
 import threading
 from contextlib import suppress
@@ -48,24 +50,30 @@ def _schedule_audio_cleanup(path: str) -> None:
 
 def _play_audio(path: str) -> None:
     """Play an audio file without invoking a command shell."""
-    try:
-        subprocess.run(
-            ["ffplay", "-nodisp", "-autoexit", path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-        return
-    except (OSError, subprocess.CalledProcessError):
-        pass
+    ffplay = shutil.which("ffplay")
+    if ffplay:
+        try:
+            subprocess.run(  # nosec B603 - argv list, no shell; path is a silent, generated tmpfile arg
+                [ffplay, "-nodisp", "-autoexit", path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            return
+        except (OSError, subprocess.CalledProcessError):
+            pass
 
     system = platform.system()
     if system == "Windows":
-        os.startfile(path)  # type: ignore[attr-defined]
+        os.startfile(path)  # nosec B606 - platform API, not a shell  # type: ignore[attr-defined]
     elif system == "Darwin":
-        subprocess.run(["open", path], check=True)
+        opener = shutil.which("open")
+        if opener:
+            subprocess.run([opener, path], check=True)  # nosec B603 - argv list, no shell
     else:
-        subprocess.run(["xdg-open", path], check=True)
+        opener = shutil.which("xdg-open")
+        if opener:
+            subprocess.run([opener, path], check=True)  # nosec B603 - argv list, no shell
 
 
 def _play_and_cleanup(path: str) -> None:

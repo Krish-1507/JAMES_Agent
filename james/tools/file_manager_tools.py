@@ -8,6 +8,7 @@ A persistent daemon mode (``AUTO_FILE_MANAGER``) keeps the user's main folders
 (Desktop, Documents, Downloads, ...) tidy on a fixed interval, so the file explorer
 manages itself.
 """
+
 from __future__ import annotations
 
 import json
@@ -93,20 +94,39 @@ class FileManager:
         from .registry import ToolRegistry
 
         child_tools = [
-            file_tools.read_file, file_tools.write_file, file_tools.list_directory,
-            file_tools.search_files, file_tools.delete_file, file_tools.create_directory,
-            file_tools.copy_file, file_tools.move_file, file_tools.rename_file, file_tools.directory_tree,
-            research_tools.research, research_tools.learn_skill,
-            forge_tools.save_skill, forge_tools.list_skills, forge_tools.forget_skill,
+            file_tools.read_file,
+            file_tools.write_file,
+            file_tools.list_directory,
+            file_tools.search_files,
+            file_tools.delete_file,
+            file_tools.create_directory,
+            file_tools.copy_file,
+            file_tools.move_file,
+            file_tools.rename_file,
+            file_tools.directory_tree,
+            research_tools.research,
+            research_tools.learn_skill,
+            forge_tools.save_skill,
+            forge_tools.list_skills,
+            forge_tools.forget_skill,
         ]
         child = ToolRegistry(tools=child_tools, discover_plugins=False)
 
         from ..core.agent import Agent
 
         resolved = _resolve_scope(scope)
-        prompt = _FILE_MANAGER_PROMPT.format(scope=resolved, goal=goal or "Organise and tidy this location completely.")
+        prompt = _FILE_MANAGER_PROMPT.format(
+            scope=resolved, goal=goal or "Organise and tidy this location completely."
+        )
         # The background manager respects the global confirmation setting.
-        agent = Agent(self._llm, child, max_iterations=50, confirm_dangerous=settings.assistant.confirm_dangerous_actions, nudge=False, system_prompt=prompt)
+        agent = Agent(
+            self._llm,
+            child,
+            max_iterations=50,
+            confirm_dangerous=settings.assistant.confirm_dangerous_actions,
+            nudge=False,
+            system_prompt=prompt,
+        )
 
         tid = uuid.uuid4().hex[:8]
         record = {
@@ -177,7 +197,7 @@ class FileManager:
                         break
                     try:
                         self.submit(scope, "Keep this location organised and tidy.")
-                    except Exception:
+                    except Exception:  # nosec B112 - one failing scope must not stall the daemon
                         continue
 
         self._daemon = threading.Thread(target=_loop, daemon=True)

@@ -6,6 +6,7 @@ JAMES can look things up on the web, synthesise an answer, and — crucially —
 capability is available directly next time. This is the self-improving loop:
 research -> understand -> turn it into executable code.
 """
+
 from __future__ import annotations
 
 import re
@@ -34,12 +35,12 @@ def _gather_sources(query: str, max_sources: int) -> list[str]:
             res = fetch_url(url, max_chars=4000)
             if res.ok:
                 parts.append(f"[source: {url}]\n{res.output}")
-        except Exception:
+        except Exception:  # nosec B112 - one failing source must not abort research
             continue
     return parts
 
 
-_DDG_REDIRECT_RE = re.compile(r'^/l/\?uddg=(.+)$', re.IGNORECASE)
+_DDG_REDIRECT_RE = re.compile(r"^/l/\?uddg=(.+)$", re.IGNORECASE)
 _URL_RE = re.compile(r'https?://[^\s<>"]+')
 
 

@@ -1,4 +1,5 @@
 """JAMES — top-level orchestrator that wires voice, LLM and tools together."""
+
 from __future__ import annotations
 
 import base64
@@ -53,7 +54,7 @@ def _history_fernet() -> Fernet:
 
 
 def _make_wake_re(wake_word: str) -> re.Pattern:
-    return re.compile(r'\b' + re.escape(wake_word) + r'\b', re.IGNORECASE)
+    return re.compile(r"\b" + re.escape(wake_word) + r"\b", re.IGNORECASE)
 
 
 def encrypt_history(history: list) -> bytes:
@@ -136,7 +137,7 @@ class Assistant:
         scheduler.start()
         self.on_event = None  # GUI hook: receives dict events (type: user|thinking|reply|speak)
 
-# ---- live tool hooks (console by default, GUI overrides via set_tool_hooks) ----
+    # ---- live tool hooks (console by default, GUI overrides via set_tool_hooks) ----
     def _on_tool_start(self, call_id: str, name: str, args: dict) -> None:
         if getattr(self, "cli", None):
             self.cli.print_tool_start(name, _fmt_args(args))
@@ -152,7 +153,14 @@ class Assistant:
             tag = "[green]✓[/green]" if ok else "[red]✗[/red]"
             console.print(f"{tag} {name}: {result[:120]}")
         self._emit(
-            {"type": "tool", "call_id": call_id, "name": name, "args": args, "result": result, "ok": ok}
+            {
+                "type": "tool",
+                "call_id": call_id,
+                "name": name,
+                "args": args,
+                "result": result,
+                "ok": ok,
+            }
         )
 
     def set_tool_hooks(self, on_tool=None, on_tool_start=None, on_tool_pending=None) -> None:
@@ -231,10 +239,7 @@ class Assistant:
             return False
         provider = Select.ask(
             "provider",
-            choices=[
-                f"{p}  ·  {DEFAULT_MODELS.get(p, '')}"
-                for p in PROVIDERS
-            ],
+            choices=[f"{p}  ·  {DEFAULT_MODELS.get(p, '')}" for p in PROVIDERS],
             default=f"{settings.llm.provider}  ·  {DEFAULT_MODELS.get(settings.llm.provider, '')}",
             show_default=False,
         )
@@ -245,7 +250,11 @@ class Assistant:
         choices = model_choices(provider)
         if not choices:
             choices = [DEFAULT_MODELS.get(provider, "gpt-4o-mini")]
-        default = settings.llm.model if provider == settings.llm.provider else DEFAULT_MODELS.get(provider, choices[0])
+        default = (
+            settings.llm.model
+            if provider == settings.llm.provider
+            else DEFAULT_MODELS.get(provider, choices[0])
+        )
         model = Select.ask(
             f"model for {provider}:",
             choices=choices,
@@ -266,7 +275,9 @@ class Assistant:
         if not choices:
             from rich.prompt import Prompt as RichPrompt
 
-            model = RichPrompt.ask(f"Enter an id for the {provider} provider", default=settings.llm.model)
+            model = RichPrompt.ask(
+                f"Enter an id for the {provider} provider", default=settings.llm.model
+            )
             return self.switch_model(provider, model)
         try:
             from rich.prompt import Select
@@ -311,7 +322,7 @@ class Assistant:
                 self._save_history()
                 if legacy_path != path:
                     legacy_path.unlink()
-        except Exception:
+        except Exception:  # nosec B110 - best-effort legacy history migration
             pass
 
     def _save_history(self) -> None:
@@ -326,7 +337,7 @@ class Assistant:
                 os.fsync(handle.fileno())
                 temp_name = handle.name
             os.replace(temp_name, path)
-        except Exception:
+        except Exception:  # nosec B110 - best-effort history persistence
             pass
 
     def export_conversation(self, format: str = "json") -> str:
@@ -338,7 +349,9 @@ class Assistant:
 
             if format == "json":
                 export_path = settings.assistant.workspace_dir / "conversation_export.json"
-                export_path.write_text(json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8")
+                export_path.write_text(
+                    json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
             elif format == "markdown":
                 export_path = settings.assistant.workspace_dir / "conversation_export.md"
                 md = ["# JAMES Conversation Export\n"]
@@ -406,7 +419,7 @@ class Assistant:
             # Persist the summary to long-term memory so future *sessions*
             # can recall it — this is the cross-session learning loop.
             self._remember_summary(summary_text)
-        except Exception:
+        except Exception:  # nosec B110 - summarization failure must not break the loop
             pass
 
     def _remember_summary(self, summary: str) -> None:
@@ -416,7 +429,7 @@ class Assistant:
             from ..tools.memory_tools import remember
 
             remember.run(text=f"[session summary] {summary}")
-        except Exception:
+        except Exception:  # nosec B110 - memory persistence is best-effort
             pass
 
     def get_memory_facts(self) -> list[dict]:
@@ -463,8 +476,7 @@ class Assistant:
             hints.append(f"[Relevant memory]\n{mem}")
         if skills:
             hints.append(
-                "[Relevant saved skills — consider invoking one of these "
-                "if it fits]\n" + skills
+                "[Relevant saved skills — consider invoking one of these if it fits]\n" + skills
             )
         prompt = "\n\n".join([*hints, user_text]) if hints else user_text
 
@@ -489,8 +501,7 @@ class Assistant:
         saved = any(
             m.get("role") == "assistant"
             and any(
-                tc.get("function", {}).get("name") == "save_skill"
-                for tc in m.get("tool_calls", [])
+                tc.get("function", {}).get("name") == "save_skill" for tc in m.get("tool_calls", [])
             )
             for m in new_msgs
         )
@@ -535,7 +546,9 @@ class Assistant:
 
         hour = datetime.datetime.now().hour
         part = "morning" if hour < 12 else "afternoon" if hour < 18 else "evening"
-        self.speak(f"Good {part}, {settings.assistant.user_name}. {settings.assistant.name} online. How can I help?")
+        self.speak(
+            f"Good {part}, {settings.assistant.user_name}. {settings.assistant.name} online. How can I help?"
+        )
 
     def voice_loop(self) -> None:
         engine = (settings.assistant.wake_engine or "always").lower()

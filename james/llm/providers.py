@@ -4,6 +4,7 @@
   OpenAI-compatible ``custom`` endpoint (Ollama, LM Studio, vLLM, Together...).
 * ``AnthropicProvider`` and ``GeminiProvider`` use their native SDKs.
 """
+
 from __future__ import annotations
 
 import json
@@ -219,8 +220,12 @@ class AnthropicProvider(LLMProvider):
             if block.type == "text":
                 content_text += block.text
             elif block.type == "tool_use":
-                tool_calls.append(ToolCall(id=block.id, name=block.name, arguments=dict(block.input)))
-        return LLMResponse(content=content_text, tool_calls=tool_calls, raw=resp, finish_reason=resp.stop_reason)
+                tool_calls.append(
+                    ToolCall(id=block.id, name=block.name, arguments=dict(block.input))
+                )
+        return LLMResponse(
+            content=content_text, tool_calls=tool_calls, raw=resp, finish_reason=resp.stop_reason
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -240,54 +245,67 @@ class GeminiProvider(LLMProvider):
         max_tokens: int = 2048,
         timeout: int = 120,
     ):
-        import google.generativeai as genai
+        # Uses the current `google.genai` SDK (the older `google.generativeai`
+        # package is end-of-life as of 2026).
+        from google import genai
+        from google.genai import types as genai_types
 
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
-        genai.configure(api_key=api_key)
-        self._genai = genai
-        self._model = genai.GenerativeModel(model)
+        self._api_key = api_key
+        self._types = genai_types
+        self._client = genai.Client(api_key=api_key)
 
     def validate(self) -> None:
-        if not self._genai.api_key:
+        if not self._api_key:
             raise RuntimeError("Missing GEMINI_API_KEY.")
 
-    @staticmethod
-    def _to_gemini_tools(tools: list[Tool]) -> list[dict[str, Any]]:
-        decls = []
+    def _to_gemini_tools(self, tools: list[Tool]) -> list:
+        T = self._types
+        declarations = []
         for t in tools:
             fn = t.get("function", t)
-            decls.append(
-                {
-                    "name": fn["name"],
-                    "description": fn.get("description", ""),
-                    "parameters": fn.get("parameters", {"type": "object", "properties": {}}),
-                }
+            declarations.append(
+                T.FunctionDeclaration(
+                    name=fn["name"],
+                    description=fn.get("description", ""),
+                    parameters=fn.get("parameters", {"type": "object", "properties": {}}),
+                )
             )
-        return [{"function_declarations": decls}]
+        return [T.Tool(function_declarations=declarations)]
 
     def _to_gemini_contents(self, messages: list[Message]):
+        T = self._types
         mapping = {"user": "user", "assistant": "model", "tool": "user", "system": "user"}
         contents = []
         for m in messages:
             role = mapping.get(m["role"], "user")
             if m["role"] == "tool":
-                contents.append({"role": "user", "parts": [f"[tool result] {m['content']}"]})
+                contents.append(
+                    T.Content(
+                        role="user",
+                        parts=[T.Part(text=f"[tool result] {m.get('content', '')}")],
+                    )
+                )
             elif m["role"] == "assistant" and m.get("tool_calls"):
-                parts = []
+                parts: list = []
                 if m.get("content"):
-                    parts.append(m["content"])
+                    parts.append(T.Part(text=m["content"]))
                 for tc in m["tool_calls"]:
                     fn = tc.get("function", {})
                     try:
                         args = json.loads(fn.get("arguments") or "{}")
                     except json.JSONDecodeError:
                         args = {}
-                    parts.append({"function_call": {"name": fn.get("name"), "args": args}})
-                contents.append({"role": "model", "parts": parts})
+                    parts.append(
+                        T.Part(function_call=T.FunctionCall(name=fn.get("name"), args=args))
+                    )
+                contents.append(T.Content(role="model", parts=parts))
             else:
-                contents.append({"role": role, "parts": [m.get("content", "")]})
+                contents.append(
+                    T.Content(role=role, parts=[T.Part(text=str(m.get("content", "")))])
+                )
         return contents
 
     def chat(
@@ -298,23 +316,38 @@ class GeminiProvider(LLMProvider):
         images: list[str] | None = None,
         model: str | None = None,
     ) -> LLMResponse:
-        contents = self._to_gemini_contents(messages)
-        kwargs: dict[str, Any] = dict(
-            generation_config={
-                "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
-            }
+        T = self._types
+        config = T.GenerateContentConfig(
+            temperature=self.temperature,
+            max_output_tokens=self.max_tokens,
         )
         if tools:
-            kwargs["tools"] = self._to_gemini_tools(tools)
+            config.tools = self._to_gemini_tools(tools)
 
-        resp = self._model.generate_content(contents, **kwargs)
+        resp = self._client.models.generate_content(
+            model=model or self.model,
+            contents=self._to_gemini_contents(messages),
+            config=config,
+        )
         text = ""
         tool_calls: list[ToolCall] = []
-        for part in resp.candidates[0].content.parts:
-            fc = getattr(part, "function_call", None)
-            if fc is not None:
-                tool_calls.append(ToolCall(id="", name=fc.name, arguments=dict(fc.args)))
-            elif getattr(part, "text", None):
-                text += part.text
+        if resp.candidates:
+            for part in resp.candidates[0].content.parts:
+                fc = getattr(part, "function_call", None)
+                if fc is not None:
+                    tool_calls.append(
+                        ToolCall(id=fc.id or "", name=fc.name, arguments=dict(fc.args or {}))
+                    )
+                elif getattr(part, "text", None):
+                    text += part.text
+        # Also read the convenience aggregate (used when candidates aren't present).
+        for fc in resp.function_calls or []:
+            if fc.name not in {tc.name for tc in tool_calls}:
+                tool_calls.append(
+                    ToolCall(
+                        id=getattr(fc, "id", None) or "",
+                        name=fc.name,
+                        arguments=dict(fc.args or {}),
+                    )
+                )
         return LLMResponse(content=text, tool_calls=tool_calls, raw=resp)

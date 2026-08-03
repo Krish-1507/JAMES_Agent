@@ -5,6 +5,7 @@ panels for the user and JAMES, a spinner while the model is thinking, dim
 inline tool status, and a styled input prompt. Depends only on ``rich`` (a
 core dependency) so it always works in ``--text`` mode.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -40,7 +41,11 @@ class JamesCLI:
         # streams to UTF-8 so the panels always render.
         def _reconfigure(stream) -> None:
             configure = getattr(stream, "reconfigure", None)
-            if configure is not None and stream.encoding and stream.encoding.lower() not in ("utf-8", "utf8"):
+            if (
+                configure is not None
+                and stream.encoding
+                and stream.encoding.lower() not in ("utf-8", "utf8")
+            ):
                 with suppress(Exception):
                     configure(encoding="utf-8")
 
@@ -49,7 +54,7 @@ class JamesCLI:
 
             _reconfigure(sys.stdout)
             _reconfigure(sys.stderr)
-        except Exception:
+        except Exception:  # nosec B110 - best-effort UTF-8 stream setup
             pass
         self.console = Console()
         self._printed_header = False
@@ -89,9 +94,7 @@ class JamesCLI:
         )
         status.add_row(brand, meta)
 
-        self.console.print(
-            Panel(status, box=box.ROUNDED, border_style=_ACCENT, padding=(0, 1))
-        )
+        self.console.print(Panel(status, box=box.ROUNDED, border_style=_ACCENT, padding=(0, 1)))
 
     # ------------------------------------------------------------------ prompt
     def read_prompt(self, user_name: str) -> str:

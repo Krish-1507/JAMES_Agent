@@ -27,7 +27,7 @@ jobs:
       - name: Dependency vulnerability scan
         run: pip-audit
       - name: Static security analysis
-        run: bandit -q -r james -x tests -b .bandit-baseline.json
+        run: bandit -q -r james -x tests
 
   codeql:
     runs-on: ubuntu-latest

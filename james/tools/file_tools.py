@@ -1,4 +1,5 @@
 """File-system tools: read, write, search and explore the user's files."""
+
 from __future__ import annotations
 
 import json
@@ -22,8 +23,14 @@ def _trash_receipt() -> Path:
     "read_file",
     "Read the full text content of a file on the user's computer. Supports txt, md, json, csv, py, code and most text files.",
     {
-        "path": {"type": "string", "description": "Path to the file (absolute or relative to the workspace)."},
-        "max_lines": {"type": "integer", "description": "Optional cap on number of lines returned."},
+        "path": {
+            "type": "string",
+            "description": "Path to the file (absolute or relative to the workspace).",
+        },
+        "max_lines": {
+            "type": "integer",
+            "description": "Optional cap on number of lines returned.",
+        },
     },
     required=["path"],
 )
@@ -74,7 +81,10 @@ def list_directory(path: str = "") -> ToolResult:
     "Recursively search file contents for a keyword and return matching lines with file paths.",
     {
         "pattern": {"type": "string", "description": "Text or regex pattern to search for."},
-        "path": {"type": "string", "description": "Directory to search in (defaults to workspace)."},
+        "path": {
+            "type": "string",
+            "description": "Directory to search in (defaults to workspace).",
+        },
     },
     required=["pattern"],
 )
@@ -87,7 +97,17 @@ def search_files(pattern: str, path: str = "") -> ToolResult:
     for f in base.rglob("*"):
         if not f.is_file():
             continue
-        if f.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx", ".pptx", ".exe", ".dll"}:
+        if f.suffix.lower() in {
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".pdf",
+            ".docx",
+            ".pptx",
+            ".exe",
+            ".dll",
+        }:
             continue
         try:
             for i, line in enumerate(f.read_text(errors="ignore").splitlines(), 1):
@@ -95,7 +115,7 @@ def search_files(pattern: str, path: str = "") -> ToolResult:
                     hits.append(f"{f}:{i}: {line.strip()}")
                     if len(hits) >= 50:
                         break
-        except Exception:
+        except Exception:  # nosec B112 - unreadable file must not abort the whole search
             continue
         if len(hits) >= 50:
             break
@@ -150,7 +170,9 @@ def restore_last_deleted() -> ToolResult:
     )
     if result.get("ok"):
         receipt.unlink(missing_ok=True)
-    return ToolResult(ok=bool(result.get("ok")), output=str(result.get("output", "Restore failed.")))
+    return ToolResult(
+        ok=bool(result.get("ok")), output=str(result.get("output", "Restore failed."))
+    )
 
 
 @tool(
@@ -243,7 +265,10 @@ def rename_file(path: str, new_name: str) -> ToolResult:
     "Show a tree view of a directory's contents (files and folders), up to a max depth.",
     {
         "path": {"type": "string", "description": "Directory path (defaults to workspace)."},
-        "max_depth": {"type": "integer", "description": "Maximum folder depth to display (default 3)."},
+        "max_depth": {
+            "type": "integer",
+            "description": "Maximum folder depth to display (default 3).",
+        },
     },
 )
 def directory_tree(path: str = "", max_depth: int = 3) -> ToolResult:

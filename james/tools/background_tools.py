@@ -5,6 +5,7 @@ background task spins up an isolated sub-agent (in a daemon thread) that works o
 the request autonomously; the caller gets a task id immediately and can check
 progress later. Tasks are persisted so they survive restarts.
 """
+
 from __future__ import annotations
 
 import json
@@ -98,7 +99,7 @@ class BackgroundManager:
                         message=record["result"][:100],
                         timeout=5,
                     )
-            except Exception:
+            except Exception:  # nosec B110 - best-effort notification
                 pass
 
         thread = threading.Thread(target=_run, daemon=True)
@@ -110,8 +111,7 @@ class BackgroundManager:
 
     def list_tasks(self) -> list[dict]:
         return [
-            {"id": t["id"], "task": t["task"], "status": t["status"]}
-            for t in self._tasks.values()
+            {"id": t["id"], "task": t["task"], "status": t["status"]} for t in self._tasks.values()
         ]
 
     def _all_tools(self):
@@ -142,7 +142,9 @@ def background_task(task: str) -> ToolResult:
         tid = _manager.submit(task)
     except Exception as exc:
         return ToolResult(ok=False, output=f"Could not start background task: {exc}")
-    return ToolResult(ok=True, output=f"Started background task {tid}. Check with get_background_result({tid}).")
+    return ToolResult(
+        ok=True, output=f"Started background task {tid}. Check with get_background_result({tid})."
+    )
 
 
 @tool(
@@ -154,7 +156,9 @@ def list_background_tasks() -> ToolResult:
     tasks = _manager.list_tasks()
     if not tasks:
         return ToolResult(ok=True, output="No background tasks.")
-    return ToolResult(ok=True, output="\n".join(f"[{t['status']}] {t['id']}: {t['task']}" for t in tasks))
+    return ToolResult(
+        ok=True, output="\n".join(f"[{t['status']}] {t['id']}: {t['task']}" for t in tasks)
+    )
 
 
 @tool(

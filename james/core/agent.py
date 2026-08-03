@@ -1,4 +1,5 @@
 """The reasoning core: an LLM-driven agent that calls tools to complete tasks."""
+
 from __future__ import annotations
 
 import json
@@ -85,7 +86,9 @@ class Agent:
         self.registry = registry
         self.max_iterations = max_iterations
         self.confirm_dangerous = (
-            settings.assistant.confirm_dangerous_actions if confirm_dangerous is None else confirm_dangerous
+            settings.assistant.confirm_dangerous_actions
+            if confirm_dangerous is None
+            else confirm_dangerous
         )
         self.confirm = confirm or request_confirmation
         self._nudge = nudge
@@ -93,7 +96,7 @@ class Agent:
         # ``call_id`` so a "started" event can be matched to its "finished" event.
         self.on_tool_start = None  # on_tool_start(call_id, name, args)
         self.on_tool_pending = None  # on_tool_pending(call_id, name, args)
-        self.on_tool = None        # on_tool(call_id, name, args, result)
+        self.on_tool = None  # on_tool(call_id, name, args, result)
         self._tool_seq = 0
         self.system_prompt = system_prompt or build_system_prompt()
         if confirm is None:
@@ -160,7 +163,7 @@ class Agent:
                     reply += (
                         "\n\n[JAMES] That was a multi-step task — I can save it as a "
                         "reusable skill so I never re-figure it out. Just say "
-                        "\"save this as a skill called <name>\" and I'll persist it."
+                        '"save this as a skill called <name>" and I\'ll persist it.'
                     )
                 return reply, _history_out()
 
@@ -192,9 +195,7 @@ class Agent:
                     with suppress(Exception):
                         self.on_tool(call_id, tc.name, tc.arguments, result_text)
 
-                messages.append(
-                    {"role": "tool", "tool_call_id": tc.id, "content": result_text}
-                )
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_text})
 
         return (
             "I reached the step limit while working on that. Here is what I have so far.",

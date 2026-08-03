@@ -5,6 +5,7 @@ browse, install, and manage from within JAMES. Installable plugins carry
 bundled ``code`` for a JAMES-generated skill, which is validated by the
 same constrained runtime as Skill Forge before it is persisted or loaded.
 """
+
 from __future__ import annotations
 
 import json
@@ -66,7 +67,7 @@ def _load_catalog() -> list[dict[str, Any]]:
     if _MARKETPLACE_FILE.exists():
         try:
             return json.loads(_MARKETPLACE_FILE.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception:  # nosec B110 - corrupt/partial catalog falls back to built-ins
             pass
     return list(_BUILTIN_CATALOG)
 
@@ -169,15 +170,25 @@ def _resolve_dependencies(
     "search_plugins",
     "Search the plugin marketplace catalog for available community plugins.",
     {
-        "query": {"type": "string", "description": "Search term matched against plugin names and descriptions."},
-        "tags": {"type": "array", "description": "Optional tags to filter by (e.g. files, web, automation)."},
+        "query": {
+            "type": "string",
+            "description": "Search term matched against plugin names and descriptions.",
+        },
+        "tags": {
+            "type": "array",
+            "description": "Optional tags to filter by (e.g. files, web, automation).",
+        },
     },
 )
 def search_plugins(query: str = "", tags: list[str] | None = None) -> ToolResult:
     catalog = _load_catalog()
     results = []
     for plugin in catalog:
-        if query and query.lower() not in plugin.get("name", "").lower() and query.lower() not in plugin.get("description", "").lower():
+        if (
+            query
+            and query.lower() not in plugin.get("name", "").lower()
+            and query.lower() not in plugin.get("description", "").lower()
+        ):
             continue
         if tags:
             plugin_tags = plugin.get("tags", [])
@@ -272,7 +283,8 @@ def _bundle_skill(name: str, description: str = "") -> dict[str, Any]:
     tool_desc = description or tools[0].description or ""
     source = _sign_local_plugin(source, name, tool_desc)
     manifest = parse_manifest(source)
-    assert manifest is not None
+    if manifest is None:
+        raise ValueError("Plugin source has an unparsable manifest.")
     return {
         "ok": True,
         "plugin": {

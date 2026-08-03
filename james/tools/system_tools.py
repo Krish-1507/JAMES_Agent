@@ -1,9 +1,10 @@
 """System automation tools: run commands, open apps, screen, media control, multimodal input."""
+
 from __future__ import annotations
 
 import base64
 import re
-import subprocess
+import subprocess  # nosec B404 - required to launch desktop applications
 import webbrowser
 
 from ..core.command_policy import is_safe_command, parse_safe_command
@@ -11,10 +12,9 @@ from ..core.isolation import run_isolated
 from ..core.workspace import resolve_workspace_path, workspace_root
 from .base import ToolResult, tool
 
-_SHELL_METACHAR_RE = re.compile(r'[;&|`$(){}[\]<>!#]')
+_SHELL_METACHAR_RE = re.compile(r"[;&|`$(){}[\]<>!#]")
 
-_URL_SCHEME_RE = re.compile(r'^https?://', re.IGNORECASE)
-
+_URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 
 
 def _is_safe_command(command: str) -> bool:
@@ -39,14 +39,19 @@ def run_shell_command(command: str, timeout: int = 60) -> ToolResult:
         {"args": args, "timeout": timeout, "workspace": str(workspace_root())},
         timeout=timeout + 5,
     )
-    return ToolResult(ok=bool(result.get("ok")), output=str(result.get("output", "Command failed.")))
+    return ToolResult(
+        ok=bool(result.get("ok")), output=str(result.get("output", "Command failed."))
+    )
 
 
 @tool(
     "open_application",
     "Open a website in the default browser or launch a desktop application by name/path.",
     {
-        "target": {"type": "string", "description": "A URL, app name (e.g. 'notepad') or full path to an executable."},
+        "target": {
+            "type": "string",
+            "description": "A URL, app name (e.g. 'notepad') or full path to an executable.",
+        },
     },
     required=["target"],
 )
@@ -57,7 +62,7 @@ def open_application(target: str) -> ToolResult:
         if _URL_SCHEME_RE.match(target):
             webbrowser.open(target)
             return ToolResult(ok=True, output=f"Opened {target} in browser.")
-        subprocess.Popen([target], shell=False)
+        subprocess.Popen([target], shell=False)  # nosec B603 - argv list, no shell; gated by mode/confirmation
         return ToolResult(ok=True, output=f"Launched {target}.")
     except Exception as exc:
         return ToolResult(ok=False, output=f"Failed to open: {exc}")
@@ -103,7 +108,9 @@ def get_system_info() -> ToolResult:
         )
         bat = psutil.sensors_battery()
         if bat:
-            info["battery"] = f"{bat.percent}% ({'plugged in' if bat.power_plugged else 'on battery'})"
+            info["battery"] = (
+                f"{bat.percent}% ({'plugged in' if bat.power_plugged else 'on battery'})"
+            )
     except ImportError:
         info["battery"] = "psutil not installed"
     return ToolResult(ok=True, output=str(info))
@@ -112,7 +119,12 @@ def get_system_info() -> ToolResult:
 @tool(
     "control_media",
     "Control media playback with a keyboard shortcut: play_pause, next, previous, volume_up, volume_down, mute.",
-    {"action": {"type": "string", "description": "One of play_pause|next|previous|volume_up|volume_down|mute."}},
+    {
+        "action": {
+            "type": "string",
+            "description": "One of play_pause|next|previous|volume_up|volume_down|mute.",
+        }
+    },
     required=["action"],
 )
 def control_media(action: str) -> ToolResult:
@@ -158,7 +170,10 @@ def clipboard(text: str = "") -> ToolResult:
     "Encode a local image as a base64 data URI for vision-capable models. Returns the data URI.",
     {
         "path": {"type": "string", "description": "Path to the image file."},
-        "description": {"type": "string", "description": "Optional description of what to look for in the image."},
+        "description": {
+            "type": "string",
+            "description": "Optional description of what to look for in the image.",
+        },
     },
     required=["path"],
 )
@@ -168,7 +183,9 @@ def upload_image(path: str, description: str = "") -> ToolResult:
         if not p.exists():
             return ToolResult(ok=False, output=f"File not found: {path}")
         if p.stat().st_size > 10_000_000:
-            return ToolResult(ok=False, output=f"File too large: {p.stat().st_size} bytes (max 10MB)")
+            return ToolResult(
+                ok=False, output=f"File too large: {p.stat().st_size} bytes (max 10MB)"
+            )
         mime = {
             ".png": "image/png",
             ".jpg": "image/jpeg",

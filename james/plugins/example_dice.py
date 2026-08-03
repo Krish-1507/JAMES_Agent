@@ -2,6 +2,7 @@
 
 Install it by simply being in this package — JAMES discovers it automatically.
 """
+
 from ..tools.base import tool
 
 
@@ -14,7 +15,7 @@ from ..tools.base import tool
     },
 )
 def roll_dice(sides: int = 6, count: int = 1):
-    import random
+    import random  # nosec B311 - dice simulation, not security/crypto
 
-    rolls = [random.randint(1, sides) for _ in range(max(1, count))]
+    rolls = [random.randint(1, sides) for _ in range(max(1, count))]  # nosec B311
     return f"Rolled {count}d{sides}: {rolls} (total {sum(rolls)})"

@@ -11,6 +11,7 @@ invoked directly in Python (e.g. for tests or from other plugins), which is
 intentionally not gated here — treat that as trusted code. Untrusted input
 must always arrive through ``execute``.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -100,29 +101,72 @@ def help_command() -> ToolResult:
         lines.append(f"- {t.name}: {t.description[:100]}")
     return ToolResult(ok=True, output="Available tools:\n" + "\n".join(lines))
 
+
 def _audit_hmac_key() -> bytes:
     path = settings.assistant.workspace_dir / ".james_audit_hmac.key"
     return load_or_create_secret("JAMES_AUDIT_HMAC_KEY", path)
 
+
 # Built-in registry.
 ALL_TOOLS: list[Tool] = [
-    read_file, write_file, list_directory, search_files, delete_file,
-    create_word_document, create_powerpoint, create_pdf,
-    web_search, fetch_url,
-    browser_navigate, browser_click, browser_type, browser_extract,
-    browser_screenshot, browser_close, browser_health,
-    remember, recall,
-    schedule_task, list_scheduled, cancel_task,
-    delegate, save_skill, list_skills, forget_skill,
-    run_shell_command, open_application, take_screenshot, upload_image,
-    get_system_info, control_media, clipboard,
-    computer_use, click_at, type_text, press_key, screenshot_save,
-    create_directory, copy_file, move_file, rename_file, restore_last_deleted, directory_tree,
-    research, learn_skill,
-    background_task, list_background_tasks, get_background_result,
-    manage_files, list_file_manager_tasks, stop_file_manager,
-    help_command, task_dependency_graph,
-    list_plugins, search_plugins, install_plugin, publish_skill,
+    read_file,
+    write_file,
+    list_directory,
+    search_files,
+    delete_file,
+    create_word_document,
+    create_powerpoint,
+    create_pdf,
+    web_search,
+    fetch_url,
+    browser_navigate,
+    browser_click,
+    browser_type,
+    browser_extract,
+    browser_screenshot,
+    browser_close,
+    browser_health,
+    remember,
+    recall,
+    schedule_task,
+    list_scheduled,
+    cancel_task,
+    delegate,
+    save_skill,
+    list_skills,
+    forget_skill,
+    run_shell_command,
+    open_application,
+    take_screenshot,
+    upload_image,
+    get_system_info,
+    control_media,
+    clipboard,
+    computer_use,
+    click_at,
+    type_text,
+    press_key,
+    screenshot_save,
+    create_directory,
+    copy_file,
+    move_file,
+    rename_file,
+    restore_last_deleted,
+    directory_tree,
+    research,
+    learn_skill,
+    background_task,
+    list_background_tasks,
+    get_background_result,
+    manage_files,
+    list_file_manager_tasks,
+    stop_file_manager,
+    help_command,
+    task_dependency_graph,
+    list_plugins,
+    search_plugins,
+    install_plugin,
+    publish_skill,
 ]
 
 # Tools that mutate the system and should ask for confirmation when enabled.
@@ -167,7 +211,7 @@ def _discover_builtin_plugins(registry: ToolRegistry) -> None:
                 _register_module(registry, importlib.import_module(f"james.plugins.{mod.name}"))
             except Exception as exc:  # a bad plugin must not crash JAMES
                 print(f"[plugins] failed to load james.plugins.{mod.name}: {exc}")
-    except Exception:
+    except Exception:  # nosec B110 - plugin discovery must not crash startup
         pass
 
 
@@ -262,7 +306,9 @@ class ToolRegistry:
 
         # Dry-run: simulate dangerous actions instead of executing them.
         if settings.assistant.dry_run and is_dangerous_tool_call(name, arguments):
-            result = ToolResult(ok=True, output=f"[DRY RUN] Would have executed '{name}' with {arguments}")
+            result = ToolResult(
+                ok=True, output=f"[DRY RUN] Would have executed '{name}' with {arguments}"
+            )
             self._audit(name, arguments, result)
             return result
 
@@ -287,7 +333,7 @@ class ToolRegistry:
             signed = f"{digest} | {line}"
             with open(settings.assistant.audit_log, "a", encoding="utf-8") as f:
                 f.write(signed)
-        except Exception:
+        except Exception:  # nosec B110 - a write failure must not break the tool call
             pass
 
     @staticmethod

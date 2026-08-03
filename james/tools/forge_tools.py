@@ -4,6 +4,7 @@ Generated skills are not general Python plugins. They are parsed and restricted
 to pure, straight-line tool functions before they are ever written or executed.
 Trusted arbitrary Python plugins use a separate, explicit opt-in path.
 """
+
 from __future__ import annotations
 
 import ast
@@ -133,7 +134,9 @@ def _scan_for_dangerous_imports(code: str) -> list[str]:
             allowed_names = _ALLOWED_IMPORTS.get(module)
             if node.level or allowed_names is None or not names <= allowed_names:
                 rendered = "." * node.level + module
-                dangerous.append(f"line {node.lineno}: from {rendered} import {', '.join(sorted(names))}")
+                dangerous.append(
+                    f"line {node.lineno}: from {rendered} import {', '.join(sorted(names))}"
+                )
     return dangerous
 
 
@@ -174,11 +177,16 @@ def _validate_skill_ast(code: str) -> list[str]:
                 and isinstance(decorator.func, ast.Name)
                 and decorator.func.id == "tool"
                 and all(_literal_only(arg) for arg in decorator.args)
-                and all(keyword.arg is not None and _literal_only(keyword.value) for keyword in decorator.keywords)
+                and all(
+                    keyword.arg is not None and _literal_only(keyword.value)
+                    for keyword in decorator.keywords
+                )
             ):
                 valid_decorator = True
         if not valid_decorator:
-            issues.append(f"line {statement.lineno}: every function must use a literal @tool(...) decorator")
+            issues.append(
+                f"line {statement.lineno}: every function must use a literal @tool(...) decorator"
+            )
         else:
             tool_functions += 1
         for default in (*statement.args.defaults, *[d for d in statement.args.kw_defaults if d]):
@@ -190,7 +198,9 @@ def _validate_skill_ast(code: str) -> list[str]:
 
     for node in ast.walk(tree):
         if isinstance(node, _BANNED_NODES):
-            issues.append(f"line {getattr(node, 'lineno', '?')}: {type(node).__name__} is not allowed")
+            issues.append(
+                f"line {getattr(node, 'lineno', '?')}: {type(node).__name__} is not allowed"
+            )
         if isinstance(node, ast.Name) and node.id.startswith("__"):
             issues.append(f"line {node.lineno}: dunder names are not allowed")
         if isinstance(node, ast.Call) and (
@@ -213,7 +223,9 @@ class _StripImports(ast.NodeTransformer):
         return None
 
 
-def load_generated_skill_source(code: str, module_name: str = "james_generated_skill") -> ModuleType:
+def load_generated_skill_source(
+    code: str, module_name: str = "james_generated_skill"
+) -> ModuleType:
     issues = _validate_skill_ast(code)
     if issues:
         raise ValueError("; ".join(issues))
@@ -228,7 +240,10 @@ def load_generated_skill_source(code: str, module_name: str = "james_generated_s
             "ToolResult": ToolResult,
         }
     )
-    exec(compile(tree, f"<{module_name}>", "exec"), module.__dict__)
+    # The generated skill source is AST-validated above (no imports, attributes,
+    # loops, classes, or dynamic execution) before being compiled here in a fresh,
+    # limited namespace, so exec() operates only on reviewed straight-line code.
+    exec(compile(tree, f"<{module_name}>", "exec"), module.__dict__)  # nosec B102
     return module
 
 
@@ -339,7 +354,7 @@ def list_skills() -> ToolResult:
 
             for registered_tool in discover_plugin_tools(path, trusted=trusted):
                 names.append(f"{registered_tool.name}: {registered_tool.description[:60]}")
-        except Exception:
+        except Exception:  # nosec B112 - one broken skill must not abort listing
             continue
     return ToolResult(ok=True, output="\n".join(names) or "No skills yet.")
 
@@ -356,7 +371,9 @@ def forget_skill(name: str) -> ToolResult:
     if not path.exists():
         return ToolResult(ok=False, output=f"No such skill: {fname}")
     if not path.read_text(encoding="utf-8").startswith(_GENERATED_SKILL_HEADER):
-        return ToolResult(ok=False, output="Refusing to delete a trusted external plugin via Skill Forge.")
+        return ToolResult(
+            ok=False, output="Refusing to delete a trusted external plugin via Skill Forge."
+        )
     reg = _registry.get("reg")
     for tool_name in _skill_tools.get(fname, []):
         if reg is not None:
@@ -394,7 +411,7 @@ def _skill_infos() -> list[dict]:
             if not source.startswith(_GENERATED_SKILL_HEADER):
                 continue
             module = load_generated_skill(path)
-        except Exception:
+        except Exception:  # nosec B112 - broken skill must not abort skill discovery
             continue
         for registered_tool in _find_tools(module):
             infos.append(
@@ -444,7 +461,11 @@ def _derive_name(user_msg: str) -> str:
 def auto_forge_from_history(llm, history: list, max_steps: int = 8) -> ToolResult:
     """Generate a constrained pure-function skill from recent history."""
     user_msg = next(
-        (message.get("content", "") for message in reversed(history) if message.get("role") == "user"),
+        (
+            message.get("content", "")
+            for message in reversed(history)
+            if message.get("role") == "user"
+        ),
         "",
     )
     steps: list[str] = []

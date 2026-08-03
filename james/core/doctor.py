@@ -3,6 +3,7 @@
 Surfaces the most common setup problems (missing deps, missing keys, no mic,
 unwritable workspace, missing browser) in one PASS/WARN/FAIL report.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -58,7 +59,7 @@ def run_diagnostics() -> str:
     sdk_map = {
         "openai": "OpenAI",
         "anthropic": "Anthropic",
-        "google.generativeai": "Gemini",
+        "google.genai": "Gemini",
         "mcp": "MCP client",
     }
     for mod, label in sdk_map.items():
@@ -107,8 +108,13 @@ def run_diagnostics() -> str:
     if settings.llm.api_key:
         out.append(_line("PASS", f"API key set for '{settings.llm.provider}'"))
     else:
-        out.append(_line("WARN", f"No API key for '{settings.llm.provider}'",
-                         "set it in .env, or use LLM_PROVIDER=custom + Ollama"))
+        out.append(
+            _line(
+                "WARN",
+                f"No API key for '{settings.llm.provider}'",
+                "set it in .env, or use LLM_PROVIDER=custom + Ollama",
+            )
+        )
 
     # Failover
     if settings.llm.failover:
@@ -119,14 +125,19 @@ def run_diagnostics() -> str:
     # Mic
     try:
         import speech_recognition as sr
+
         mics = sr.Microphone.list_microphone_names()
-        out.append(_line("PASS", f"Microphone available ({len(mics)} found)") if mics
-                   else _line("WARN", "No microphone detected"))
+        out.append(
+            _line("PASS", f"Microphone available ({len(mics)} found)")
+            if mics
+            else _line("WARN", "No microphone detected")
+        )
     except Exception as exc:
         out.append(_line("WARN", "Mic check skipped", str(exc)[:80]))
 
     # .env
     from pathlib import Path
+
     if Path(".env").exists():
         out.append(_line("PASS", ".env present"))
     else:
@@ -145,11 +156,16 @@ def run_diagnostics() -> str:
     # Browser (Playwright chromium)
     try:
         from playwright.sync_api import sync_playwright
+
         with sync_playwright() as p:
             p.chromium.launch(headless=True).stop()
         out.append(_line("PASS", "Playwright Chromium ready"))
     except Exception:
-        out.append(_line("WARN", "Browser not ready", "pip install playwright && playwright install chromium"))
+        out.append(
+            _line(
+                "WARN", "Browser not ready", "pip install playwright && playwright install chromium"
+            )
+        )
 
     # Computer-use (desktop control)
     try:
@@ -157,7 +173,9 @@ def run_diagnostics() -> str:
 
         out.append(_line("PASS", "Computer-use (pyautogui) available"))
     except Exception:
-        out.append(_line("WARN", "Computer-use (pyautogui)", "pip install 'james-assistant[desktop]'"))
+        out.append(
+            _line("WARN", "Computer-use (pyautogui)", "pip install 'james-assistant[desktop]'")
+        )
 
     # Semantic memory
     if settings.assistant.memory_enabled:
@@ -166,16 +184,33 @@ def run_diagnostics() -> str:
 
             out.append(_line("PASS", "Semantic memory (sentence-transformers)"))
         except Exception:
-            out.append(_line("WARN", "Semantic memory", "pip install 'james-assistant[memory]' for embeddings"))
+            out.append(
+                _line(
+                    "WARN",
+                    "Semantic memory",
+                    "pip install 'james-assistant[memory]' for embeddings",
+                )
+            )
     else:
         out.append(_line("WARN", "Memory disabled", "set MEMORY_ENABLED=true"))
 
     # Offline / privacy mode
     if settings.assistant.offline_mode:
         out.append(_line("PASS", "Offline mode ON — non-local egress blocked + audited"))
-        out.append(_line("WARN", f"Egress audit: {settings.assistant.egress_audit_log}",
-                         "every blocked/allowed connection is logged here"))
+        out.append(
+            _line(
+                "WARN",
+                f"Egress audit: {settings.assistant.egress_audit_log}",
+                "every blocked/allowed connection is logged here",
+            )
+        )
     else:
-        out.append(_line("WARN", "Offline mode OFF", "set OFFLINE_MODE=true to block all non-local network egress"))
+        out.append(
+            _line(
+                "WARN",
+                "Offline mode OFF",
+                "set OFFLINE_MODE=true to block all non-local network egress",
+            )
+        )
 
     return "\n".join(out)

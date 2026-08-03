@@ -4,7 +4,40 @@ All notable changes to JAMES are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-08-03
+
+### Added
+- macOS runners added to the CI test matrix (Python 3.10-3.12).
+
+### Changed
+- Codebase normalized with `ruff format` so the pre-commit `ruff-format` hook
+  passes cleanly.
+- `[all]` extra now includes `Pillow` (it was missing, silently leaving the
+  desktop/screenshot dependency out of `pip install james-assistant[all]`).
+- mkdocs build output (`site/`) is now gitignored.
+- Gemini provider migrated to the current `google-genai` SDK (the legacy
+  `google-generativeai` package is deprecated). `GeminiProvider` now builds
+  native `types.Tool`/`types.FunctionDeclaration` tools and drives
+  `client.models.generate_content` with function-call round-trips. `.env`/config
+  keys are unchanged; only the pip package is different.
+- `james doctor` reports the new `google.genai` SDK.
+
+### Security & robustness
+- The Bandit baseline is retired: all previously suppressed findings were
+  triaged. Each remaining `subprocess`/`eval`/`exec` use now carries a justified
+  `# nosec` comment (hardened with `shutil.which` probe-first checks where it
+  matters) and `bandit -q` reports zero findings with **no baseline file** and
+  **no suppressions**.
+- `marketplace` now validates a `None` manifest with an explicit raise instead
+  of a bare `assert` (so it isn't stripped under `-O`).
+
+### Tests
+- New `tests/test_security_guard_isolation.py` adds end-to-end coverage for the
+  egress guard, worker isolation (command + trash/restore + timeout), agent
+  confirmation flow, computer-use action parsing, the Porcupine engine fallback,
+  and `james doctor`. Security-critical module coverage rose sharply (e.g.
+  `agent.py` 57->83%, `computeruse.py` 0->85%, `guard.py` 27->62%,
+  `isolation.py` 22->59%, `porcupine_engine.py` 0->80%, total 49%->54%).
 
 ### Added
 - OpenCode-style terminal chat UI: `james --text` now renders the ASCII JAMES
