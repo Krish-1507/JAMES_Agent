@@ -39,12 +39,16 @@ dependencies = [
 ui = ["PyQt5>=5.15.0"]
 # Model Context Protocol - inherit thousands of community servers
 mcp = ["mcp>=1.2.0"]
-# Document generation
+# Document generation and reading
 docs = [
     "python-docx>=1.1.0",
     "python-pptx>=0.6.23",
     "reportlab>=4.1.0",
     "fpdf2>=2.7.9",
+    "pypdf>=4.0.0",
+    "openpyxl>=3.1.0",
+    "odfpy>=1.4.0",
+    "pyarrow>=14.0.0",
 ]
 # Browser automation (Playwright)
 browser = ["playwright>=1.43.0"]
@@ -75,6 +79,10 @@ all = [
     "python-pptx>=0.6.23",
     "reportlab>=4.1.0",
     "fpdf2>=2.7.9",
+    "pypdf>=4.0.0",
+    "openpyxl>=3.1.0",
+    "odfpy>=1.4.0",
+    "pyarrow>=14.0.0",
     "playwright>=1.43.0",
     "pyautogui>=0.9.54",
     "Pillow>=10.0.0",

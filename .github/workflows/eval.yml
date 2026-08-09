@@ -1,0 +1,65 @@
+name: Eval
+
+# Benchmark runs. The GAIA validation harness needs an LLM API key, so the
+# full run is gated behind the OPENAI_API_KEY secret (absent → GAIA step
+# skips, only the offline smoke suite runs). Reports are uploaded as an
+# artifact; publish them to docs/BENCHMARKS.md when you want to announce a run.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "GAIA tasks to run (default 10)"
+        type: number
+        default: 10
+
+permissions:
+  contents: write
+
+jobs:
+  gaia:
+    name: GAIA validation subset
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install JAMES
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[docs]"
+      - name: Offline eval smoke test (no API key)
+        run: python -m james --eval smoke
+      - name: GAIA validation run
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_PROVIDER: openai
+        run: python -m james --eval gaia --download-gaia --eval-limit ${{ inputs.limit || 10 }}
+      - name: Upload eval reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-reports
+          path: workspace/evaluations/
+          if-no-files-found: ignore
+      - name: Publish results to docs/BENCHMARKS.md
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        env:
+          LLM_PROVIDER: openai
+          LLM_MODEL: ${{ vars.EVAL_MODEL || 'gpt-4o-mini' }}
+          EVAL_COMMAND: python -m james --eval gaia --download-gaia --eval-limit ${{ inputs.limit || 10 }}
+        run: |
+          REPORT=$(ls workspace/evaluations/gaia_report_*.json | tail -1)
+          python scripts/publish_benchmarks.py "$REPORT"
+      - name: Commit published results
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: publish nightly GAIA result"
+          file_pattern: docs/BENCHMARKS.md

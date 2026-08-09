@@ -107,7 +107,6 @@ class TestAuditLogIntegrity:
         assert result.ok is True
 
     def test_tampered_audit_detected(self, temp_workspace: Path):
-
         reg = ToolRegistry(discover_plugins=False)
         reg._audit("test_tool", {"arg": "val"}, ToolResult(ok=True, output="ok"))
 

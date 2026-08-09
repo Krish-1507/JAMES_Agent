@@ -183,7 +183,9 @@ JAMES is **not** a hardened OS sandbox. Spawned workers reduce blast radius but 
 | Area | Examples |
 |---|---|
 | Files | Read, write, search, copy, move, rename, and inspect directories |
+| Reading | Extract text from PDFs, Word/PPT/Excel/CSV/ODS documents, transcribe audio (Whisper), describe images with a vision model, unpack zip/tar archives |
 | Documents | Create Word, PowerPoint, and PDF files |
+| Compute | Safe, AST-allowlisted arithmetic (`calculate` — no variables, imports, or attributes) |
 | Browser | Navigate, click, type, extract text, screenshots, health checks |
 | Desktop | Screenshots, keyboard and pointer automation, vision-assisted computer use |
 | Memory | Local recall and persistent memory facts |
@@ -213,6 +215,27 @@ james --new-tool hello
 
 Skills can be published to the local marketplace and reinstalled later.
 Automatic skill generation is off by default. Enable `AUTO_SKILL=true` only if you understand the constraint model and have reviewed the generated skill workflow.
+
+## Evaluation and benchmarks
+
+JAMES ships a GAIA benchmark harness in `james/evaluation/` that scores the
+agent with a faithful port of the official answer matcher (quasi-exact match,
+number/percent closeness), isolates every task in a fresh subprocess worker
+with a hard timeout, and records per-task `tool_calls`/`iterations` plus
+level-stratified pass rates.
+
+```bash
+python -m james --eval smoke                                        # offline pipeline check (no API key)
+python -m james --eval gaia --download-gaia --eval-limit 10         # cheap real run
+python -m james --eval gaia                                         # full 166-task validation split
+```
+
+Requires `pip install -e ".[docs]"` (pypdf, openpyxl, python-docx, python-pptx,
+odfpy, pyarrow) and a gated GAIA download: accept the terms at
+[huggingface.co/datasets/gaia-benchmark/GAIA](https://huggingface.co/datasets/gaia-benchmark/GAIA)
+and set `HF_TOKEN`. Results land in `workspace/evaluations/gaia_report_*.json`
+and are tracked in [docs/BENCHMARKS.md](docs/BENCHMARKS.md), which the nightly
+`Eval` workflow (`.github/workflows/eval.yml`) updates automatically.
 
 ## Configuration
 
@@ -282,6 +305,11 @@ before JAMES can be recommended to general users are listed in the next section.
 - [x] **Guided onboarding and clearer recovery/undo behavior.** Desktop empty states guide setup, and recoverable deletion includes a dedicated Recovery view.
 
 ### Remaining before general release
+- [ ] **Published benchmark results.** The GAIA harness, isolated worker, and
+      Level-1 reading/compute tools are in; CI runs the offline smoke suite
+      nightly, executes a GAIA validation subset when an `OPENAI_API_KEY` is
+      configured, and auto-publishes runs to `docs/BENCHMARKS.md`. Real model
+      results will fill the table as runs land.
 - [ ] **Broader automated test coverage.** The suite exercises every security boundary
       (egress guard, worker isolation, agent confirmation, skill runtime, plugin
       signing) and the core agent/assistant paths, but UI, voice, browser, and

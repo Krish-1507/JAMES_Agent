@@ -294,3 +294,68 @@ def directory_tree(path: str = "", max_depth: int = 3) -> ToolResult:
     lines.append(base.name + "/")
     _walk(base, 1, "")
     return ToolResult(ok=True, output="\n".join(lines) or "(empty)")
+
+
+@tool(
+    "unzip_archive",
+    "Extract a zip or tar archive into a workspace folder. Archive entries are "
+    "checked for path traversal (zip-slip) and rejected if they escape the target folder.",
+    {
+        "path": {"type": "string", "description": "Path to the .zip or .tar/.tar.gz archive."},
+        "destination": {
+            "type": "string",
+            "description": "Folder to extract into (defaults to a folder next to the archive).",
+        },
+    },
+    required=["path"],
+)
+def unzip_archive(path: str, destination: str = "") -> ToolResult:
+    import tarfile
+    import zipfile
+
+    p = _resolve(path)
+    if not p.exists():
+        return ToolResult(ok=False, output=f"Archive not found: {p}")
+    dest = _resolve(destination) if destination else p.parent / p.stem
+    dest.mkdir(parents=True, exist_ok=True)
+    dest_root = dest.resolve()
+
+    def _safe_target(name: str) -> Path | None:
+        target = (dest / name).resolve()
+        try:
+            target.relative_to(dest_root)
+        except ValueError:
+            return None
+        return target
+
+    count = 0
+    try:
+        if p.suffix == ".zip":
+            with zipfile.ZipFile(str(p)) as archive:
+                for member in archive.infolist():
+                    if _safe_target(member.filename) is None:
+                        return ToolResult(
+                            ok=False,
+                            output=f"Blocked unsafe archive entry: {member.filename}",
+                        )
+                archive.extractall(str(dest))
+                count = len(archive.infolist())
+        elif p.suffix in (".tar", ".gz", ".tgz", ".bz2", ".xz"):
+            mode = "r:gz" if p.suffix in (".gz", ".tgz") else "r:*"
+            with tarfile.open(str(p), mode) as archive:
+                for member in archive.getmembers():
+                    if _safe_target(member.name) is None:
+                        return ToolResult(
+                            ok=False,
+                            output=f"Blocked unsafe archive entry: {member.name}",
+                        )
+                archive.extractall(str(dest))
+                count = len(archive.getmembers())
+        else:
+            return ToolResult(
+                ok=False,
+                output="Unsupported archive type. Supported: .zip, .tar, .tar.gz, .tgz, .bz2, .xz",
+            )
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Extraction failed: {exc}")
+    return ToolResult(ok=True, output=f"Extracted {count} entries to {dest}")

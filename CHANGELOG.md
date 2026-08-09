@@ -4,6 +4,65 @@ All notable changes to JAMES are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **GAIA benchmark harness** (`james/evaluation/gaia.py`): loads the public GAIA
+  validation split (166 tasks with answers), scores replies with a faithful
+  port of the official answer matcher (quasi-exact match, number/percent/float
+  closeness), stratifies results by difficulty level, and writes JSON reports.
+  Run with `james --eval gaia` (add `--download-gaia` to fetch the dataset,
+  `--eval-dir <folder>` for a local copy, `--eval-limit N` for cheap runs).
+- **Isolated eval worker** (`james/evaluation/worker.py`): each benchmark task
+  runs in a fresh interpreter subprocess with a hard timeout, so a hung LLM
+  call can never stall a suite. Tool calls and inference iterations are
+  counted per task and included in reports.
+- **Level-1 reading/compute tools** required by GAIA-style tasks:
+  `read_pdf` (pypdf), `read_document` (docx/pptx/xlsx/csv/tsv/text),
+  `extract_audio_text` (Whisper), `describe_image` (vision-capable models),
+  `unzip_archive` (zip/tar with zip-slip protection), and `calculate`
+  (AST-allowlisted arithmetic sandbox — no variables, imports, or attributes).
+- `james --eval smoke` now exercises the real evaluator pipeline
+  (metrics, reports) instead of a stub that always reported "completed".
+- `Evaluator.run_task` records `tool_calls`/`iterations` and the model reply;
+  `TaskResult` gained an `output` field.
+- Nightly benchmark workflow (`.github/workflows/eval.yml`): runs the offline
+  smoke suite always, and a GAIA validation subset when an `OPENAI_API_KEY`
+  secret is configured; reports are uploaded as artifacts.
+- `docs/BENCHMARKS.md` documenting methodology and how to reproduce a run.
+- **Automatic benchmark publishing**: `scripts/publish_benchmarks.py` appends a
+  GAIA run to the `docs/BENCHMARKS.md` results table, and the `Eval` workflow
+  runs it (and commits the update) after every successful GAIA run.
+- `read_document` now reads **ODS spreadsheets** (odfpy; added to the
+  `docs`/`all` extras), completing the docx/pptx/xlsx/csv/tsv/ods family.
+
+### Fixed (real-run hardening, validated on live GAIA data)
+- Eval workers now pin the provider chain (`settings.llm.failover = []`):
+  previously an `LLM_FAILOVER` configured in `.env` could silently switch the
+  model mid-suite when the primary failed, mixing results within one run and
+  breaking the worker-isolation regression test on machines with a `.env`.
+- GAIA metadata is now Parquet-backed upstream (Oct 2025 restructure); the
+  harness downloads/converts `metadata.parquet` → JSONL automatically
+  (`pyarrow` added to the `docs`/`all` extras) and accepts local folders
+  containing either format. Gated-dataset access via `HF_TOKEN` with a clear
+  error when the terms haven't been accepted.
+- Eval worker subprocesses run from the scratch dir — the harness now
+  propagates the package root via `PYTHONPATH` (children previously died with
+  `ModuleNotFoundError: james`).
+- Headless agents (`confirm_dangerous=False`, e.g. the eval worker) no longer
+  block on an interactive retry prompt after an LLM API error — the error
+  propagates and lands in the report as `error: ...` instead of a 30 s silent
+  stall. Report entries now always include the `error` field.
+- `OpenAICompatibleProvider.chat` raises a clean error when the endpoint
+  returns HTTP 200 with an empty/error body (free-tier model pool exhaustion)
+  instead of crashing with `TypeError: 'NoneType' object is not subscriptable`.
+- `james --eval gaia` gained `--eval-iterations N` to cap per-task token burn
+  on rate-limited free tiers.
+
+### Dependencies
+- The `[docs]` extra now includes `pypdf` and `openpyxl` (PDF/spreadsheet
+  reading); mirrored in the `[all]` extra.
+
 ## [0.3.0] - 2026-08-03
 
 ### Added

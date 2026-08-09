@@ -10,6 +10,7 @@ nav:
   - Architecture: architecture.md
   - Plugins (SDK): plugins.md
   - Security: security.md
+  - Benchmarks: BENCHMARKS.md
 markdown_extensions:
   - admonition
   - codehilite

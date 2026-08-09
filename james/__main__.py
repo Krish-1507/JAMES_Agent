@@ -68,6 +68,59 @@ def _run_diagnostics() -> int:
     return 0
 
 
+def _run_gaia_eval(args) -> int:
+    """Run the GAIA validation harness. Returns the process exit code."""
+    from pathlib import Path
+
+    from james.evaluation.gaia import (
+        download_gaia,
+        load_gaia_metadata,
+        run_gaia_suite,
+    )
+
+    eval_dir: Path | None = Path(args.eval_dir) if args.eval_dir else None
+    if eval_dir is not None and not (eval_dir / "metadata.jsonl").exists():
+        alt = eval_dir / "2023" / "validation" / "metadata.jsonl"
+        if not alt.exists():
+            print(f"[!] No metadata.jsonl found under {eval_dir}")
+            return 2
+
+    if eval_dir is None:
+        if not args.download_gaia:
+            print(
+                "[!] No GAIA dataset found. Either pass --eval-dir <folder> pointing at a\n"
+                "    GAIA validation folder (containing metadata.jsonl), or add\n"
+                "    --download-gaia to fetch the public validation set first."
+            )
+            return 2
+        eval_dir = download_gaia(
+            settings.assistant.workspace_dir / "eval_data",
+            limit=args.eval_limit or 0,
+        )
+        print(f"[+] GAIA validation set downloaded to {eval_dir}")
+
+    tasks = load_gaia_metadata(eval_dir)
+    if args.eval_level:
+        tasks = [t for t in tasks if t.level == args.eval_level]
+    if args.eval_limit:
+        tasks = tasks[: args.eval_limit]
+    if not tasks:
+        print("[!] No GAIA tasks loaded from the dataset folder.")
+        return 2
+
+    print(f"[+] Running {len(tasks)} GAIA validation tasks…")
+    report = run_gaia_suite(tasks, max_iterations=args.eval_iterations)
+    print(
+        f"[+] PASS {report['passed']}/{report['total']} "
+        f"({report['pass_rate']:.1%}) — avg {report['avg_iterations']} "
+        f"iterations, {report['avg_tool_calls']} tool calls per task"
+    )
+    for level, stats in sorted(report["by_level"].items()):
+        print(f"    Level {level}: {stats['passed']}/{stats['total']} ({stats['pass_rate']:.1%})")
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="james",
@@ -93,7 +146,37 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--web-dashboard", action="store_true", help="Launch the web-based dashboard."
     )
-    parser.add_argument("--eval", metavar="SUITE", help="Run a benchmark suite and print results.")
+    parser.add_argument("--eval", metavar="SUITE", help="Run a benchmark suite: gaia or smoke.")
+    parser.add_argument(
+        "--eval-dir",
+        metavar="DIR",
+        help="Path to a local GAIA validation folder containing metadata.jsonl.",
+    )
+    parser.add_argument(
+        "--eval-limit",
+        metavar="N",
+        type=int,
+        help="Run only the first N tasks (cheap smoke runs / CI).",
+    )
+    parser.add_argument(
+        "--eval-iterations",
+        metavar="N",
+        type=int,
+        default=20,
+        help="Max agent iterations per task (default 20; lower saves tokens).",
+    )
+    parser.add_argument(
+        "--eval-level",
+        metavar="N",
+        type=int,
+        choices=[1, 2, 3],
+        help="Only run tasks of this difficulty level (1-3).",
+    )
+    parser.add_argument(
+        "--download-gaia",
+        action="store_true",
+        help="Download the public GAIA validation set before evaluating.",
+    )
     parser.add_argument(
         "--offline",
         action="store_true",
@@ -149,13 +232,39 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     if args.eval:
-        from james.evaluation import run_benchmark
+        from james.evaluation import Evaluator
 
-        suite_name = args.eval
-        tasks = [{"description": suite_name}]
-        result = run_benchmark(suite_name, tasks, lambda desc, **kw: ("completed", []))
-        print(json.dumps(result, indent=2))
-        return 0
+        suite_name = args.eval.lower()
+        if suite_name == "gaia":
+            return _run_gaia_eval(args)
+        if suite_name == "smoke":
+            # Offline pipeline smoke test: no API key, deterministic fake agent.
+            from dataclasses import asdict
+
+            evaluator = Evaluator()
+            tasks = [
+                {"description": "What is 2 + 2?", "metadata": {"answer": "4"}},
+                {"description": "Capital of France?", "metadata": {"answer": "Paris"}},
+            ]
+            results = []
+
+            def _fake_agent(description: str, **kw):
+                answer = next(
+                    (t["metadata"]["answer"] for t in tasks if t["description"] == description),
+                    "",
+                )
+                return (answer, {"tool_calls": 2, "iterations": 1})
+
+            for task in tasks:
+                results.append(
+                    evaluator.run_task(task["description"], _fake_agent, metadata=task["metadata"])
+                )
+            summary = evaluator.summary()
+            summary["results"] = [asdict(r) for r in results]
+            print(json.dumps(summary, indent=2))
+            return 0
+        print(f"[!] Unknown suite: {args.eval}. Available suites: gaia, smoke")
+        return 2
 
     # Desktop app is the default experience. --ui forces it; if PyQt5 is not
     # installed we fall back to the text CLI with a helpful hint. Other explicit

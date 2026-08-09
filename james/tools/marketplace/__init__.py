@@ -176,6 +176,7 @@ def _resolve_dependencies(
         },
         "tags": {
             "type": "array",
+            "items": {"type": "string"},
             "description": "Optional tags to filter by (e.g. files, web, automation).",
         },
     },

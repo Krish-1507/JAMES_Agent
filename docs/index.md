@@ -21,6 +21,7 @@ The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contai
 - [Architecture](architecture.md)
 - [Writing plugins with the SDK](plugins.md)
 - [Security model and threat boundaries](security.md)
+- [Benchmarks and evaluation harness](BENCHMARKS.md)
 - [Contributing](https://github.com/Krish-1507/JAMES_Agent/blob/main/CONTRIBUTING.md)
 
 ## Project status

@@ -41,6 +41,7 @@ from .browser_tools import (
     browser_screenshot,
     browser_type,
 )
+from .compute_tools import calculate
 from .delegate_tool import delegate
 from .desktop_tools import (
     click_at,
@@ -62,6 +63,7 @@ from .file_tools import (
     rename_file,
     restore_last_deleted,
     search_files,
+    unzip_archive,
     write_file,
 )
 from .forge_tools import (
@@ -74,6 +76,7 @@ from .marketplace import install_plugin, list_plugins, publish_skill, search_plu
 from .mcp_tools import discover_mcp_tools
 from .memory_tools import recall, remember
 from .plugin_proxy import discover_plugin_tools
+from .reading_tools import describe_image, extract_audio_text, read_document, read_pdf
 from .research_tools import learn_skill, research
 from .scheduler_tools import cancel_task, list_scheduled, schedule_task
 from .system_tools import (
@@ -114,6 +117,12 @@ ALL_TOOLS: list[Tool] = [
     list_directory,
     search_files,
     delete_file,
+    read_pdf,
+    read_document,
+    extract_audio_text,
+    describe_image,
+    unzip_archive,
+    calculate,
     create_word_document,
     create_powerpoint,
     create_pdf,

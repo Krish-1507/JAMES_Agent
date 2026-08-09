@@ -7,9 +7,13 @@ task (this is what OpenClaw calls "model failover").
 
 from __future__ import annotations
 
+import logging
+
 from ..config import LLMSettings
 from .base import LLMProvider, LLMResponse
 from .providers import AnthropicProvider, GeminiProvider, OpenAICompatibleProvider
+
+_log = logging.getLogger("james.llm.failover")
 
 _BASE_URLS = {
     "openai": "https://api.openai.com/v1",
@@ -47,8 +51,15 @@ def _build_one(provider: str, model: str, settings: LLMSettings) -> LLMProvider:
             if settings.openrouter_referer:
                 extra_headers["HTTP-Referer"] = settings.openrouter_referer
             extra_headers["X-Title"] = settings.openrouter_site
+        # Each provider must use its own key — ``settings.api_key`` resolves to
+        # the *primary* provider's key and would 401 on any fallback.
+        api_key = (
+            settings.custom_api_key
+            if provider == "custom"
+            else getattr(settings, f"{provider}_api_key", "")
+        )
         return OpenAICompatibleProvider(
-            api_key=settings.api_key if provider != "custom" else settings.custom_api_key,
+            api_key=api_key,
             model=model,
             base_url=base_url,
             temperature=settings.temperature,
@@ -110,22 +121,59 @@ class FailoverProvider(LLMProvider):
     def validate(self) -> None:
         self.providers[0].validate()
 
-    def chat(self, messages, tools=None, tool_choice="auto") -> LLMResponse:
+    def chat(
+        self,
+        messages,
+        tools=None,
+        tool_choice="auto",
+        images=None,
+        model=None,
+    ) -> LLMResponse:
         last: Exception | None = None
         for i, p in enumerate(self.providers):
             label = getattr(p, "name", f"provider[{i}]")
             try:
                 if len(self.providers) > 1:
-                    print(f"[failover] trying {label}...")
-                resp = p.chat(messages, tools=tools, tool_choice=tool_choice)
+                    _log.info("failover: trying %s...", label)
+                resp = p.chat(
+                    messages,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    images=images,
+                    model=model,
+                )
                 if len(self.providers) > 1:
-                    print(f"[failover] OK served by {label}")
+                    _log.info("failover: OK served by %s", label)
                 return resp
             except Exception as exc:  # try the next provider
                 if _is_permanent_error(exc):
                     raise
                 last = exc
-                print(f"[failover] {label} failed ({exc}); retrying next...")
+                _log.warning("failover: %s failed (%s); retrying next...", label, exc)
+                continue
+        # Transient failures (rate limits, provider timeouts) often clear within
+        # a second or two — give the chain one more full pass before giving up.
+        import time as _time
+
+        _time.sleep(2)
+        _log.warning("failover: all providers failed transiently; retrying chain once")
+        for i, p in enumerate(self.providers):
+            label = getattr(p, "name", f"provider[{i}]")
+            try:
+                resp = p.chat(
+                    messages,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    images=images,
+                    model=model,
+                )
+                _log.info("failover: OK served by %s (second pass)", label)
+                return resp
+            except Exception as exc:
+                if _is_permanent_error(exc):
+                    raise
+                last = exc
+                _log.warning("failover: %s failed again (%s)", label, exc)
                 continue
         raise RuntimeError(f"All {len(self.providers)} providers failed. Last error: {last}")
 

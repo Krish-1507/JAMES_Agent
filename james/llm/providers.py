@@ -37,7 +37,12 @@ class OpenAICompatibleProvider(LLMProvider):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.extra_headers = extra_headers or {}
-        self._client = OpenAI(api_key=api_key or "sk-noauth", base_url=base_url, timeout=timeout)
+        self._client = OpenAI(
+            api_key=api_key or "sk-noauth",
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=0,
+        )
 
     def validate(self) -> None:
         if not getattr(self._client, "api_key", "") or self._client.api_key == "sk-noauth":
@@ -77,6 +82,10 @@ class OpenAICompatibleProvider(LLMProvider):
             kwargs["messages"] = multimodal
 
         resp = self._client.chat.completions.create(**kwargs)
+        if not getattr(resp, "choices", None):
+            err = getattr(resp, "error", None) or {}
+            detail = err.get("message", "") if isinstance(err, dict) else str(err)
+            raise RuntimeError(f"Provider returned no completion choice. {detail}".strip())
         choice = resp.choices[0]
         message = choice.message
 
@@ -255,6 +264,7 @@ class GeminiProvider(LLMProvider):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._api_key = api_key
+        self._timeout = timeout
         self._types = genai_types
         self._genai = genai
         self._client = None
@@ -265,7 +275,16 @@ class GeminiProvider(LLMProvider):
 
     def _get_client(self):
         if self._client is None:
-            self._client = self._genai.Client(api_key=self._api_key)
+            # Bound the call like the other providers: the genai SDK default
+            # (120s timeout, 5 retry attempts with exponential backoff) can
+            # stall a failover chain well past its budget.
+            self._client = self._genai.Client(
+                api_key=self._api_key,
+                http_options=self._types.HttpOptions(
+                    timeout=self._timeout * 1000,
+                    retry_options=self._types.HttpRetryOptions(attempts=1),
+                ),
+            )
         return self._client
 
     def _to_gemini_tools(self, tools: list[Tool]) -> list:

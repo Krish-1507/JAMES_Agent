@@ -27,6 +27,7 @@ class TaskResult:
     error: str | None = None
     timestamp: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    output: str = ""
 
 
 @dataclass
@@ -41,6 +42,7 @@ class Evaluator:
         self.output_dir = output_dir or settings.assistant.workspace_dir / "evaluations"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._results: list[TaskResult] = []
+        self._seq: int = 0
 
     def run_task(
         self,
@@ -48,29 +50,40 @@ class Evaluator:
         agent_run_fn,
         max_iterations: int = 20,
         timeout: int = 120,
+        metadata: dict[str, Any] | None = None,
     ) -> TaskResult:
-        task_id = f"eval_{int(time.time() * 1000)}"
+        """Run one task. ``agent_run_fn(description, max_iterations=...)`` must
+        return either a plain reply string or a ``(reply, stats)`` tuple where
+        ``stats`` may contain ``tool_calls`` and ``iterations``.
+        """
+        task_id = f"eval_{int(time.time() * 1000)}_{self._seq:04d}"
+        self._seq += 1
         start = time.time()
         try:
-            result, _ = agent_run_fn(description, max_iterations=max_iterations)
+            result = agent_run_fn(description, max_iterations=max_iterations)
             duration = time.time() - start
+            stats: dict[str, Any] = {}
+            if isinstance(result, tuple):
+                result, stats = result
+            output = str(result or "")
             success = bool(
-                result and not result.startswith("Error") and not result.startswith("I reached")
+                output and not output.startswith("Error") and not output.startswith("I reached")
             )
-            tool_calls = 0
-            iterations = 0
-            return TaskResult(
+            task_result = TaskResult(
                 task_id=task_id,
                 task_description=description,
                 success=success,
-                tool_calls=tool_calls,
-                iterations=iterations,
+                tool_calls=int(stats.get("tool_calls", 0)),
+                iterations=int(stats.get("iterations", 0)),
                 duration_seconds=round(duration, 2),
                 timestamp=datetime.now().isoformat(timespec="seconds"),
+                metadata=metadata or {},
+                output=output,
+                error=stats.get("error") or None,
             )
         except Exception as exc:
             duration = time.time() - start
-            return TaskResult(
+            task_result = TaskResult(
                 task_id=task_id,
                 task_description=description,
                 success=False,
@@ -79,14 +92,17 @@ class Evaluator:
                 duration_seconds=round(duration, 2),
                 error=str(exc),
                 timestamp=datetime.now().isoformat(timespec="seconds"),
+                metadata=metadata or {},
+                output="",
             )
+        self._results.append(task_result)
+        return task_result
 
     def run_suite(self, suite: BenchmarkSuite, agent_run_fn) -> list[TaskResult]:
         self._results = []
         for task in suite.tasks:
             result = self.run_task(task.get("description", ""), agent_run_fn)
             result.metadata = task.get("metadata", {})
-            self._results.append(result)
         self._save_results(suite)
         return self._results
 

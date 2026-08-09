@@ -138,6 +138,11 @@ class Agent:
                 resp = self.llm.chat(messages, tools=self.registry.schemas())
             except Exception as exc:
                 logger.warning("LLM API error: %s", exc)
+                if not self.confirm_dangerous:
+                    # Headless/unattended mode (evaluations, background tasks):
+                    # never block on an interactive retry prompt — surface the
+                    # error so the caller can record it.
+                    raise
                 retry = self.confirm(
                     "retry_llm",
                     {"error": str(exc)[:200], "attempt": "retry"},
