@@ -26,7 +26,7 @@ The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contai
 
 ## Project status
 
-JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, voice providers, memory, encrypted history, optional offline operation, a constrained Skill Forge, and a documented plugin SDK (`james.sdk`). The agent loop plans before acting, retries transient tool errors, runs independent tool calls in parallel, and compacts long contexts; web tools offer multi-engine search, main-content extraction, and JS-page rendering.
+JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, turn-based and full-duplex voice (Gemini Live / OpenAI Realtime / fully local streaming), memory, encrypted history, optional offline operation, a constrained Skill Forge, and a documented plugin SDK (`james.sdk`). The agent loop plans before acting, retries transient tool errors, runs independent tool calls in parallel, and compacts long contexts; web tools offer multi-engine search, main-content extraction, and JS-page rendering.
 
 ### Promotion readiness
 
@@ -36,6 +36,10 @@ JAMES is **alpha**. The current hardening baseline includes explicit desktop app
 
 - **Terminal CLI** (`james --text`) uses an OpenCode-style chat UI: ASCII logo,
   status header, colour-coded message panels, spinner, and styled input.
+- **Voice** (`james --voice`): turn-based speech-to-speech by default, or
+  full-duplex (`DUPLEX_MODE=gemini_live|openai_realtime|local|auto`) with
+  wake-gated sessions, interruption, and barge-in. See the README
+  [full-duplex voice section](https://github.com/Krish-1507/JAMES_Agent#full-duplex-voice-speak-and-listen-at-once).
 - **Model selection** is available in both the terminal and the desktop app:
   `/provider` and `/model` open interactive pickers in the CLI, and the desktop
   dropdown applies a `provider:model` immediately. Choices persist to `.env`

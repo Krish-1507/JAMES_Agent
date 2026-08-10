@@ -4,9 +4,48 @@ All notable changes to JAMES are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-08-10
 
 ### Added
+- **Full-duplex voice (Phase 4)** — `james/voice/duplex.py`, a new
+  simultaneous speak-and-listen mode with interruption, behind one controller:
+  - **Three interchangeable engines**: `gemini_live` (Gemini Live API,
+    true speech-to-speech, server VAD, native function calling),
+    `openai_realtime` (OpenAI Realtime API over WebSocket, server barge-in),
+    and `local` (fully local: VAD segmentation + faster-whisper — falls back
+    to openai-whisper — + edge-tts streaming playback via ffmpeg, with
+    mic-level barge-in detection). `DUPLEX_MODE=auto` picks the best engine
+    whose key exists, defaulting to the local pipeline.
+  - **`DuplexController`** — wake-gated always-on state machine: `IDLE`
+    (wake gate armed via `always` / `porcupine` / `none`) → `ACTIVE`
+    (session open) → back to `IDLE` on the idle timeout (`DUPLEX_IDLE_TIMEOUT`)
+    or a spoken exit. Thread-safe `mute()` / `interrupt()` / `stop()` and a
+    `voice_only` flag; typed text injects into the live session via
+    `send_text()` even while idle.
+  - **`VAD`** — sample-agnostic energy VAD (with optional webrtcvad) with
+    start/end utterance events; `LocalStreamingSTT` streams partial
+    transcripts through `on_partial`.
+  - **`StreamTTS`** — edge-tts synthesis streamed through an ffmpeg decoder
+    subprocess (no shell) with live mic-level barge-in that cuts playback
+    mid-sentence.
+  - **Config**: `DUPLEX_MODE`, `DUPLEX_IDLE_TIMEOUT`, `VAD_THRESHOLD`,
+    `BARGE_IN_THRESHOLD`, `STREAMING_STT_MODEL`, `DUPLEX_EDGE_VOICE`,
+    `GEMINI_LIVE_VOICE`/`GEMINI_LIVE_MODEL`,
+    `OPENAI_REALTIME_VOICE`/`OPENAI_REALTIME_MODEL`, `SPEAKER_DEVICE_INDEX`.
+  - `[voice]`/`[all]` extras now include `faster-whisper` and `webrtcvad`.
+  - The orb GUI gained a live voice status line, a mic level meter, mute /
+    interrupt / voice-only controls, and a text input that routes typed
+    messages into the duplex session (`Assistant.mute_voice`,
+    `interrupt_voice`, `set_voice_only`, `send_voice_text`); `Assistant`
+    exposes `duplex` and falls back to the turn-based loop when duplex is
+    unavailable.
+- **Duplex test suite** — `tests/test_phase4_duplex_voice.py`: 20 tests
+  covering VAD/energy levels, the wake gate, the controller state machine
+  (mute/interrupt/stop), all three session engines, local turn handling with
+  tool calls, and streaming-TTS barge-in — all without hardware, network, or
+  cloud keys.
+
+### Fixed (real-run hardening, validated on live GAIA data)
 - **GAIA benchmark harness** (`james/evaluation/gaia.py`): loads the public GAIA
   validation split (166 tasks with answers), scores replies with a faithful
   port of the official answer matcher (quasi-exact match, number/percent/float
@@ -85,8 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/BENCHMARKS.md` now carries the first real result (2026-08-09,
   10/10 on the 10-task dev subset) with methodology notes covering the
   Phase-1 agent loop.
-
-### Fixed (real-run hardening, validated on live GAIA data)
 - Eval workers now pin the provider chain (`settings.llm.failover = []`):
   previously an `LLM_FAILOVER` configured in `.env` could silently switch the
   model mid-suite when the primary failed, mixing results within one run and

@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import queue
 import re
 import tempfile
 from contextlib import suppress
@@ -126,6 +127,10 @@ class Assistant:
         self.session: str | None = session
         self._history_file = _session_path(session) if session else settings.assistant.history_file
         self._load_history()
+        # Optional GUI text input queue (orb): when set, text_loop reads from
+        # it instead of stdin so typed text stays first-class in the desktop UI.
+        self._text_queue: queue.Queue | None = None
+        self.duplex = None  # live DuplexController while full-duplex voice runs
         configure_delegate(self.llm, on_tool=self._on_tool, on_tool_start=self._on_tool_start)
         configure_computer_use(self.llm)
         configure_research(self.llm)
@@ -551,6 +556,10 @@ class Assistant:
         )
 
     def voice_loop(self) -> None:
+        mode = (settings.voice.duplex_mode or "off").lower()
+        if mode != "off":
+            self._voice_loop_duplex()
+            return
         engine = (settings.assistant.wake_engine or "always").lower()
         if engine == "none":
             self.speak("Listening continuously. Say 'exit' or 'stop' to quit.")
@@ -585,6 +594,56 @@ class Assistant:
 
         # default: "always" — continuous mic, respond only after the wake word
         self._voice_loop_wake_word()
+
+    def _voice_loop_duplex(self) -> None:
+        """Full-duplex voice: wake-gated always-on session with interruption."""
+        from ..voice.duplex import build_duplex
+
+        try:
+            controller = build_duplex(self)
+        except Exception as exc:
+            self.log.warning("Duplex voice unavailable (%s); using turn-based voice.", exc)
+            self.speak("Full-duplex voice is not available. Falling back to turn-based mode.")
+            self._voice_loop_wake_word()
+            return
+        if controller is None:
+            self._voice_loop_wake_word()
+            return
+        self.duplex = controller
+        self.speak(f"Full-duplex voice online. Say '{settings.assistant.wake_word}' to wake me.")
+        try:
+            controller.run()
+        finally:
+            self.duplex = None
+
+    # ---- live duplex controls (thread-safe; called from the GUI thread) ----
+    def mute_voice(self, muted: bool) -> None:
+        controller = getattr(self, "duplex", None)
+        if controller is not None:
+            controller.mute(muted)
+
+    def interrupt_voice(self) -> None:
+        controller = getattr(self, "duplex", None)
+        if controller is not None:
+            controller.interrupt()
+
+    def set_voice_only(self, enabled: bool) -> None:
+        controller = getattr(self, "duplex", None)
+        if controller is not None:
+            controller.voice_only = bool(enabled)
+
+    def send_voice_text(self, text: str) -> None:
+        """Typed input: routed to the duplex session when live, else queued."""
+        text = (text or "").strip()
+        if not text:
+            return
+        controller = getattr(self, "duplex", None)
+        if controller is not None:
+            controller.send_text(text)
+            return
+        queue = self._text_queue
+        if queue is not None:
+            queue.put(text)
 
     def _voice_loop_wake_word(self) -> None:
         self.speak(f"Say '{settings.assistant.wake_word}' to wake me up.")
@@ -639,11 +698,19 @@ class Assistant:
             "/resume <name>, /clear, /export, /provider, /model"
         )
         while True:
-            try:
-                user_text = self.cli.read_prompt(settings.assistant.user_name)
-            except (EOFError, KeyboardInterrupt):
-                break
-            user_text = (user_text or "").strip()
+            if self._text_queue is not None:
+                # GUI mode: typed text arrives through the queue.
+                try:
+                    user_text = self._text_queue.get(timeout=0.5)
+                except queue.Empty:
+                    continue
+                user_text = (user_text or "").strip()
+            else:
+                try:
+                    user_text = self.cli.read_prompt(settings.assistant.user_name)
+                except (EOFError, KeyboardInterrupt):
+                    break
+                user_text = (user_text or "").strip()
             if user_text.lower() in {"exit", "quit", "stop"}:
                 self.speak("Goodbye!", cli=self.cli)
                 break

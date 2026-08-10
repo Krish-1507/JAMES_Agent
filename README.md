@@ -30,6 +30,12 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
   `/clear`, `/export`, or `james --session <name>`).
 - Wake-word support: `WAKE_ENGINE=always` (continuous listen),
   `porcupine` (low-power Picovoice), or `none`.
+- **Full-duplex voice** (`DUPLEX_MODE`): simultaneous speak-and-listen with
+  interruption (barge-in), wake-gated always-on sessions, and native
+  speech-to-speech with Gemini Live or OpenAI Realtime — or a fully local
+  pipeline (VAD + faster-whisper + edge-tts streaming). Typed text stays
+  first-class: you can interrupt or steer the conversation with the keyboard
+  from the desktop app.
 - A closed learning loop: skills forged in one session are re-surfaced when
   the same kind of request comes up again, conversation summaries persist to
   long-term memory for cross-session recall, and the marketplace can publish
@@ -162,6 +168,54 @@ TTS_PROVIDER=edge
 ```bash
 pip install -e ".[voice]"   # installs whisper + edge-tts + pyttsx3 + pyaudio
 ```
+
+## Full-duplex voice (speak and listen at once)
+
+Instead of a strict "talk → wait → listen" loop, JAMES can keep a live session
+open: you speak when you want, interrupt mid-answer, and JAMES responds while
+you are still talking. Set `DUPLEX_MODE` to one of:
+
+| Mode | Engine | Requires |
+|---|---|---|
+| `off` | Turn-based loop (default) | — |
+| `auto` | Best available engine | Any LLM key |
+| `gemini_live` | Gemini Live API — true speech-to-speech, server VAD, native function calling | `GEMINI_API_KEY` |
+| `openai_realtime` | OpenAI Realtime API — speech-to-speech over WebSocket, server barge-in | `OPENAI_API_KEY` |
+| `local` | Fully local: VAD segmentation + faster-whisper (falls back to openai-whisper) + edge-tts streaming over ffmpeg, with mic-level barge-in | `ffmpeg` on PATH |
+
+`auto` picks the first available of `gemini_live` → `openai_realtime` → `local`.
+
+```dotenv
+DUPLEX_MODE=auto
+WAKE_ENGINE=always            # always | none | porcupine
+DUPLEX_IDLE_TIMEOUT=30        # seconds of quiet before the session closes
+VAD_THRESHOLD=0.02            # speech sensitivity (0..1 RMS)
+BARGE_IN_THRESHOLD=0.03       # how loudly you must speak to interrupt
+STREAMING_STT_MODEL=small     # faster-whisper model for the local engine
+DUPLEX_EDGE_VOICE=en-US-AriaNeural
+GEMINI_LIVE_VOICE=Puck
+GEMINI_LIVE_MODEL=gemini-2.0-flash-live-001
+OPENAI_REALTIME_VOICE=alloy
+OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview
+```
+
+Duplex sessions are **wake-gated**: the controller sits idle until the wake
+word, opens a session on wake, and returns to idle after the idle timeout or a
+spoken exit — so the mic is not continuously transcribed. The desktop orb
+shows the live state (idle / listening / transcribing / thinking / speaking),
+a mic level meter, and controls for mute, interrupt, and voice-only mode;
+typed text routes into the live session at any moment. In the terminal,
+`james --voice` runs the same controller with CLI printing.
+
+Local streaming STT uses faster-whisper when installed (`[voice]` extra now
+ships it) and falls back to openai-whisper. The local engine's function
+calling goes through the normal gated, audited `ToolRegistry`; cloud sessions
+use their native tool-calling protocol with the same registry as the executor.
+
+> Duplex mode needs `VOICE_ENABLED=true` and a wake engine other than `none`
+> to be always-available; with `WAKE_ENGINE=none` the session activates
+> immediately. Voice interactions run the full agent loop, so dangerous
+> actions still require confirmation exactly as they do in text mode.
 
 ## Safety model
 
@@ -305,6 +359,9 @@ Core modules:
 - `james/core/assistant.py` — orchestration, encrypted history, and `switch_model` (live provider/agent rebuild).
 - `james/core/guard.py` — offline egress guard.
 - `james/ui/cli.py` — the OpenCode-style terminal renderer (`JamesCLI`).
+- `james/voice/duplex.py` — full-duplex voice: VAD, wake gate, and the
+  `DuplexController` state machine behind the Gemini Live / OpenAI Realtime /
+  local streaming engines (see the full-duplex voice section above).
 - `james/llm/catalog.py` — the shared provider/model catalog used by the CLI pickers, the desktop dropdown, and setup.
 - `james/sdk/` — the plugin authoring SDK (manifest, validation, scaffolding).
 
@@ -339,9 +396,10 @@ before JAMES can be recommended to general users are listed in the next section.
       results will fill the table as runs land.
 - [ ] **Broader automated test coverage.** The suite exercises every security boundary
       (egress guard, worker isolation, agent confirmation, skill runtime, plugin
-      signing) and the core agent/assistant paths, but UI, voice, browser, and
-      document tools still have thin coverage. Target ≥80% on security-critical
-      modules before recommending JAMES to non-technical users.
+      signing), the core agent/assistant paths, and the full-duplex voice stack
+      (VAD, controller, all three session engines, and streaming-TTS barge-in).
+      UI, browser, and document tools still have thin coverage. Target ≥80% on
+      security-critical modules before recommending JAMES to non-technical users.
 - [ ] **macOS signed artifacts.** The test matrix now covers macOS (Ubuntu +
       Windows + macOS across Python 3.10-3.12); OIDC-signed release artifacts
       still build on Linux only, which is fine because the wheel is a pure-Python

@@ -216,6 +216,37 @@ class VoiceSettings:
     mic_device_index: int | None = field(
         default_factory=lambda: int(_env("MIC_DEVICE_INDEX")) if _env("MIC_DEVICE_INDEX") else None
     )
+    speaker_device_index: int | None = field(
+        default_factory=lambda: int(_env("SPEAKER_DEVICE_INDEX"))
+        if _env("SPEAKER_DEVICE_INDEX")
+        else None
+    )
+
+    # Full-duplex voice: "off" | "auto" | "gemini_live" | "openai_realtime" | "local"
+    duplex_mode: str = field(default_factory=lambda: _env("DUPLEX_MODE", "off").lower())
+    # "auto" prefers a native cloud session when its key exists, else the local engine.
+    duplex_idle_timeout: float = field(default_factory=lambda: _float("DUPLEX_IDLE_TIMEOUT", 30.0))
+    # Native-session model ids (overridable for previews).
+    gemini_live_model: str = field(
+        default_factory=lambda: _env("GEMINI_LIVE_MODEL", "gemini-2.0-flash-live-001")
+    )
+    openai_realtime_model: str = field(
+        default_factory=lambda: _env("OPENAI_REALTIME_MODEL", "gpt-4o-realtime-preview")
+    )
+    # Native-session voices.
+    gemini_live_voice: str = field(default_factory=lambda: _env("GEMINI_LIVE_VOICE", "Puck"))
+    openai_realtime_voice: str = field(
+        default_factory=lambda: _env("OPENAI_REALTIME_VOICE", "alloy")
+    )
+    # Local-engine voice (edge-tts voice name).
+    duplex_edge_voice: str = field(
+        default_factory=lambda: _env("DUPLEX_EDGE_VOICE", "en-US-AriaNeural")
+    )
+    # Local-engine speech-to-text model (faster-whisper when installed, else openai-whisper).
+    streaming_stt_model: str = field(default_factory=lambda: _env("STREAMING_STT_MODEL", "small"))
+    # Voice activity detection / barge-in sensitivity (0..1 RMS levels).
+    vad_threshold: float = field(default_factory=lambda: _float("VAD_THRESHOLD", 0.02))
+    barge_in_threshold: float = field(default_factory=lambda: _float("BARGE_IN_THRESHOLD", 0.03))
 
 
 @dataclass

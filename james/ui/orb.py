@@ -12,20 +12,25 @@ A system tray icon lets you hide/show and quit.
 
 from __future__ import annotations
 
+import queue
 import threading
+from contextlib import suppress
 
 from PyQt5.QtCore import QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QIcon, QPainter
 from PyQt5.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
     QMenu,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QSystemTrayIcon,
     QVBoxLayout,
@@ -48,6 +53,19 @@ def _make_icon() -> QIcon:
     return QIcon(pix)
 
 
+def _voice_status_text(state: str) -> str:
+    return {
+        "idle": "🔍 Idle — wake word armed",
+        "ready": "🟢 Duplex session live",
+        "listening": "🎧 Listening…",
+        "transcribing": "🎙 Transcribing…",
+        "thinking": "🧠 Thinking…",
+        "speaking": "🔊 Speaking (barge-in on)",
+        "muted": "🔇 Mic muted",
+        "error": "⚠️ Voice error",
+    }.get(state, f"◉ {state}")
+
+
 class _Worker(QThread):
     log = pyqtSignal(str)
     status = pyqtSignal(str)
@@ -56,11 +74,47 @@ class _Worker(QThread):
     tool_output = pyqtSignal(str, str)  # call_id, chunk
     canvas_start = pyqtSignal(str, str)  # call_id, name
     canvas_done = pyqtSignal(str, str, str, bool)  # call_id, name, snippet, ok
+    level = pyqtSignal(float)  # live mic level 0..1 (full-duplex voice)
+    typed = pyqtSignal(str)  # typed text routed into the assistant loop
 
     def __init__(self):
         super().__init__()
         self._assistant = None
         self._lock = threading.Lock()
+        self._text_in = queue.Queue()
+
+    # ---- GUI → worker controls (thread-safe) ----
+    def send_text(self, text: str):
+        text = (text or "").strip()
+        if not text:
+            return
+        self._text_in.put(text)
+        with self._lock:
+            assistant = self._assistant
+        if assistant is not None:
+            with self._lock, suppress(Exception):
+                assistant.send_voice_text(text)
+
+    def mute(self, muted: bool):
+        with self._lock:
+            assistant = self._assistant
+        if assistant is not None:
+            with self._lock, suppress(Exception):
+                assistant.mute_voice(muted)
+
+    def interrupt(self):
+        with self._lock:
+            assistant = self._assistant
+        if assistant is not None:
+            with self._lock, suppress(Exception):
+                assistant.interrupt_voice()
+
+    def set_voice_only(self, enabled: bool):
+        with self._lock:
+            assistant = self._assistant
+        if assistant is not None:
+            with self._lock, suppress(Exception):
+                assistant.set_voice_only(enabled)
 
     def apply_model(self, provider: str, model: str) -> bool:
         """Immediately switch the running assistant to a new provider+model.
@@ -88,6 +142,9 @@ class _Worker(QThread):
         self._assistant.on_event = self._on_event
         # Route every tool call (parent + delegated sub-agents) to the canvas.
         self._assistant.set_tool_hooks(self._on_tool, self._on_tool_start)
+        # Typed text stays first-class: the main loop reads this queue.
+        with self._lock:
+            self._assistant._text_queue = self._text_in
 
         import sys
 
@@ -119,6 +176,13 @@ class _Worker(QThread):
             self.stream.emit(ev.get("text", ""))
         elif t == "speak":
             self.status.emit("🔊 Speaking")
+        elif t == "voice":
+            state = ev.get("state", "")
+            self.status.emit(_voice_status_text(state))
+        elif t == "voice_level":
+            self.level.emit(ev.get("level", 0.0))
+        elif t == "voice_partial":
+            self.canvas.emit(f"🎤 …{ev.get('text', '')[:70]}")
 
     def _on_tool_start(self, call_id: str, name: str, args: dict):
         self.canvas_start.emit(call_id, name)
@@ -161,6 +225,46 @@ class OrbWindow(QMainWindow):
         self.reply.setWordWrap(True)
         self.reply.setStyleSheet("font-size:14px; color:#cde; padding:6px;")
         layout.addWidget(self.reply)
+
+        # Live mic level (full-duplex voice waveform-ish meter)
+        self.level_bar = QProgressBar()
+        self.level_bar.setRange(0, 100)
+        self.level_bar.setValue(0)
+        self.level_bar.setTextVisible(False)
+        self.level_bar.setFixedHeight(8)
+        self.level_bar.setStyleSheet(
+            "QProgressBar { background:#0e2f44; border:none; border-radius:4px; }"
+            "QProgressBar::chunk { background:#39c; border-radius:4px; }"
+        )
+        layout.addWidget(self.level_bar)
+
+        # Voice controls: mute, interrupt, voice-only
+        voice_layout = QHBoxLayout()
+        self.mic_btn = QPushButton("🎤 Mute Mic")
+        self.mic_btn.setCheckable(True)
+        self.mic_btn.toggled.connect(self._on_mic_toggle)
+        voice_layout.addWidget(self.mic_btn)
+
+        self.interrupt_btn = QPushButton("⏹ Stop Speaking")
+        self.interrupt_btn.clicked.connect(self._on_interrupt)
+        voice_layout.addWidget(self.interrupt_btn)
+
+        self.voice_only_cb = QCheckBox("Voice-only")
+        self.voice_only_cb.toggled.connect(self._on_voice_only)
+        voice_layout.addWidget(self.voice_only_cb)
+        layout.addLayout(voice_layout)
+
+        # Typed text stays first-class: hidden by voice-only mode.
+        text_layout = QHBoxLayout()
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText("Type a message… (text stays available in duplex mode)")
+        self.text_input.returnPressed.connect(self._on_send_text)
+        text_layout.addWidget(self.text_input)
+        self.send_btn = QPushButton("Send")
+        self.send_btn.clicked.connect(self._on_send_text)
+        text_layout.addWidget(self.send_btn)
+        layout.addLayout(text_layout)
+        self._text_row = text_layout
 
         # History view
         layout.addWidget(QLabel("Conversation"))
@@ -218,6 +322,7 @@ class OrbWindow(QMainWindow):
         self.worker.canvas_done.connect(self._on_canvas_done)
         self.worker.stream.connect(self._on_stream)
         self.worker.tool_output.connect(self._on_tool_output)
+        self.worker.level.connect(self._on_level)
         self._stream_text = ""
         self._stream_i = 0
         self._timer = QTimer()
@@ -357,6 +462,30 @@ class OrbWindow(QMainWindow):
 
     def _on_status(self, text: str):
         self.orb.setText(f"◉ {text}")
+
+    def _on_level(self, level: float):
+        value = max(0, min(100, int(level * 100)))
+        if abs(value - self.level_bar.value()) >= 2:
+            self.level_bar.setValue(value)
+
+    def _on_mic_toggle(self, muted: bool):
+        self.worker.mute(muted)
+        self.mic_btn.setText("🔊 Unmute Mic" if muted else "🎤 Mute Mic")
+
+    def _on_interrupt(self):
+        self.worker.interrupt()
+
+    def _on_voice_only(self, enabled: bool):
+        self.worker.set_voice_only(enabled)
+        for widget in (self.text_input, self.send_btn):
+            widget.setVisible(not enabled)
+
+    def _on_send_text(self):
+        text = self.text_input.text()
+        if not text.strip():
+            return
+        self.text_input.clear()
+        self.worker.send_text(text)
 
     def _on_canvas(self, line: str):
         self.canvas.addItem(line)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "james-assistant"
-version = "0.3.0"
+version = "0.4.0"
 description = "JAMES is an alpha-stage, desktop-first LLM assistant with explicit safety boundaries."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -61,6 +61,8 @@ voice = [
     "PyAudio>=0.2.13",
     "openai-whisper>=20231117",
     "edge-tts>=6.1.0",
+    "faster-whisper>=1.0.0",
+    "webrtcvad>=0.0.11",
 ]
 # Long-term semantic memory (RAG)
 memory = ["sentence-transformers>=2.2.0", "numpy>=1.24.0"]
@@ -94,6 +96,8 @@ all = [
     "PyAudio>=0.2.13",
     "openai-whisper>=20231117",
     "edge-tts>=6.1.0",
+    "faster-whisper>=1.0.0",
+    "webrtcvad>=0.0.11",
     "sentence-transformers>=2.2.0",
     "numpy>=1.24.0",
 ]

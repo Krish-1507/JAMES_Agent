@@ -9,7 +9,8 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
 ┌────────────────────────────────────────────┐
 │ CLI / GUI / Dashboard / Voice loop          │
 │   • JamesCLI (OpenCode-style rich renderer) │
-│   • PyQt orb (desktop, catalog dropdown)    │
+│   • PyQt orb (desktop, catalog dropdown,    │
+│     duplex voice controls)                  │
 ├────────────────────────────────────────────┤
 │ Assistant (sessions, history, memory,      │
 │           skills, events, switch_model)     │
@@ -24,6 +25,20 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
 │ tools         │ plugins/, MCP, SDK skills) │
 └───────────────┴────────────────────────────┘
 ```
+
+## Full-duplex voice
+
+`james.voice.duplex` runs a second, parallel runtime when `DUPLEX_MODE` is
+enabled: the `DuplexController` owns a wake-gated state machine
+(`IDLE` → `ACTIVE` → `IDLE`), and the active `DuplexSession` is one of three
+interchangeable engines — Gemini Live (`GeminiLiveSession`), OpenAI Realtime
+(`OpenAIRealtimeSession`), or the fully local pipeline (`LocalDuplexEngine`:
+`VAD` + `LocalStreamingSTT` + `StreamTTS` with mic-level barge-in). Tool calls
+from either cloud engine are executed through the same gated, audited
+`ToolRegistry`; local turns use the agent loop's tool executor. The assistant
+exposes thread-safe controls (`mute_voice`, `interrupt_voice`,
+`set_voice_only`, `send_voice_text`) that the orb GUI wires to buttons and a
+text input, so typed text and voice share one conversation.
 
 ## Core pieces
 
@@ -55,6 +70,10 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
   `save_llm_config`, which persists `LLM_PROVIDER`/`LLM_MODEL` back to `.env`.
   Used by the CLI pickers, the desktop dropdown, and the setup wizard.
 - **`james.ui.cli`** — `JamesCLI`, the rich/OpenCode-style terminal renderer.
+- **`james.voice.duplex`** — the full-duplex voice runtime: `VAD`, `WakeGate`,
+  `DuplexController`, the Gemini Live / OpenAI Realtime / local streaming
+  session engines, `LocalStreamingSTT`, and barge-in-capable `StreamTTS` (see
+  the full-duplex voice section above).
 - **`james.config`** — validated settings loaded from `.env`.
 - **`james.sdk`** — the stable plugin authoring surface (see
   [plugins.md](plugins.md)).
