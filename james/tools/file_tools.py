@@ -328,6 +328,11 @@ def unzip_archive(path: str, destination: str = "") -> ToolResult:
             return None
         return target
 
+    def _unsafe_link(linkname: str) -> bool:
+        if linkname.startswith(("/", "\\")):
+            return True
+        return ".." in linkname.replace("\\", "/").split("/")
+
     count = 0
     try:
         if p.suffix == ".zip":
@@ -338,7 +343,7 @@ def unzip_archive(path: str, destination: str = "") -> ToolResult:
                             ok=False,
                             output=f"Blocked unsafe archive entry: {member.filename}",
                         )
-                archive.extractall(str(dest))
+                    archive.extract(member, str(dest))
                 count = len(archive.infolist())
         elif p.suffix in (".tar", ".gz", ".tgz", ".bz2", ".xz"):
             mode = "r:gz" if p.suffix in (".gz", ".tgz") else "r:*"
@@ -349,7 +354,12 @@ def unzip_archive(path: str, destination: str = "") -> ToolResult:
                             ok=False,
                             output=f"Blocked unsafe archive entry: {member.name}",
                         )
-                archive.extractall(str(dest))
+                    if (member.islnk() or member.issym()) and _unsafe_link(member.linkname):
+                        return ToolResult(
+                            ok=False,
+                            output=f"Blocked unsafe archive link: {member.name}",
+                        )
+                    archive.extract(member, str(dest))
                 count = len(archive.getmembers())
         else:
             return ToolResult(

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import re
+from contextlib import suppress
 from html import unescape
 from urllib.parse import urljoin, urlparse
 
@@ -74,11 +75,12 @@ def _looks_like_js_shell(html: str, text: str) -> bool:
         return False
     lowered = html.lower()
     return "<script" in lowered and (
-        "id=\"app\"" in lowered
-        or "id=\"root\"" in lowered
-        or "id=\"__next\"" in lowered
+        'id="app"' in lowered
+        or 'id="root"' in lowered
+        or 'id="__next"' in lowered
         or "webpack" in lowered
-        or "vue" in lowered or "react" in lowered
+        or "vue" in lowered
+        or "react" in lowered
     )
 
 
@@ -159,6 +161,7 @@ def extract_links(html: str, base_url: str, limit: int = 30) -> list[str]:
 # ---------------------------------------------------------------------------
 # Multi-engine search
 # ---------------------------------------------------------------------------
+
 
 def _search_tavily(query: str, max_results: int) -> list[dict] | None:
     key = os.environ.get("TAVILY_API_KEY", "").strip()
@@ -245,6 +248,7 @@ def _format_results(results: list[dict]) -> str:
 # Tools
 # ---------------------------------------------------------------------------
 
+
 @tool(
     "web_search",
     "Search the web (auto-selects Tavily, Brave, or DuckDuckGo) and return "
@@ -316,11 +320,9 @@ def fetch_url(
         resp = _get(url)
         text = extract_main_text(resp.text)
         if _looks_like_js_shell(resp.text, text):
-            try:
+            with suppress(Exception):  # headless rendering is best-effort
                 rendered = _render_with_playwright(url)
                 text = extract_main_text(rendered) or text
-            except Exception:
-                pass  # headless browser unavailable/failed — keep the plain fetch
         output = text[:max_chars]
         if include_links:
             links = extract_links(resp.text, resp.url, limit=links_limit)
@@ -347,9 +349,7 @@ def fetch_url(
     },
     required=["url"],
 )
-def extract_links_tool(
-    url: str, max_links: int = 30, same_domain_only: bool = True
-) -> ToolResult:
+def extract_links_tool(url: str, max_links: int = 30, same_domain_only: bool = True) -> ToolResult:
     blocked = _offline_blocked()
     if blocked:
         return blocked

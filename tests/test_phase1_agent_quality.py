@@ -25,6 +25,7 @@ from james.tools.registry import ToolRegistry
 
 # --- fakes -----------------------------------------------------------------
 
+
 @dataclass
 class FakeLLM:
     """Scripted LLM: a queue of responses; chat() pops them one at a time."""
@@ -97,6 +98,7 @@ def _agent(llm: FakeLLM, **kwargs) -> Agent:
 
 # --- error classification ---------------------------------------------------
 
+
 def test_classify_transient() -> None:
     for text in ("rate limit exceeded", "timed out", "connection reset", "HTTP 503"):
         assert classify_tool_error(text) == TRANSIENT_ERROR, text
@@ -113,6 +115,7 @@ def test_classify_unknown() -> None:
 
 
 # --- plan-then-act -----------------------------------------------------------
+
 
 def test_require_plan_nudges_once_then_executes() -> None:
     llm = FakeLLM(
@@ -145,6 +148,7 @@ def test_plan_not_required_when_disabled() -> None:
 
 
 # --- self-correction ----------------------------------------------------------
+
 
 def test_transient_error_auto_retries_once() -> None:
     state = {"calls": 0}
@@ -181,7 +185,7 @@ def test_transient_retry_failure_adds_hint() -> None:
         ]
     )
     agent = _agent(llm, retry_backoff=0.0)
-    reply, history = agent.run("use transient")
+    _reply, history = agent.run("use transient")
     assert agent.auto_retries == 1
     tool_msg = next(m for m in history if m["role"] == "tool")
     assert "[TRANSIENT error" in tool_msg["content"]
@@ -204,7 +208,7 @@ def test_permanent_error_not_retried() -> None:
         ]
     )
     agent = Agent(llm, reg, max_iterations=5, nudge=False, retry_backoff=0.0)
-    reply, history = agent.run("call bad")
+    _reply, history = agent.run("call bad")
     assert state["calls"] == 1
     assert agent.auto_retries == 0
     tool_msg = next(m for m in history if m["role"] == "tool")
@@ -212,6 +216,7 @@ def test_permanent_error_not_retried() -> None:
 
 
 # --- parallel tool calls -------------------------------------------------------
+
 
 def test_parallel_calls_run_concurrently() -> None:
     llm = FakeLLM(
@@ -342,6 +347,7 @@ def test_thread_safe_registry_audit() -> None:
 
 # --- context compaction -------------------------------------------------------
 
+
 def test_compaction_triggers_and_preserves_tail() -> None:
     big = "x" * 5000
 
@@ -366,8 +372,7 @@ def test_compaction_triggers_and_preserves_tail() -> None:
     assert agent.compactions >= 1
     # Last tool call must still be present verbatim.
     assert any(
-        m["role"] == "tool" and m["content"] == big and m["tool_call_id"] == "t4"
-        for m in history
+        m["role"] == "tool" and m["content"] == big and m["tool_call_id"] == "t4" for m in history
     )
     # The summary message replaced the middle, and the tail is preserved.
     assert any(
@@ -424,6 +429,7 @@ def test_extract_links_function_still_exposed() -> None:
 
 
 # --- web tools (offline, unit level) ------------------------------------------
+
 
 def test_extract_main_text_strips_nav() -> None:
     from james.tools.web_tools import extract_main_text
@@ -504,7 +510,9 @@ def test_web_search_uses_tavily_when_key_present(monkeypatch) -> None:
 
         class _R:
             def json(self):
-                return {"results": [{"title": "T", "url": "https://t.example", "content": "snippet"}]}
+                return {
+                    "results": [{"title": "T", "url": "https://t.example", "content": "snippet"}]
+                }
 
             def raise_for_status(self):
                 return None
@@ -561,7 +569,11 @@ def test_fetch_url_no_playwright_when_text_rich(monkeypatch) -> None:
     calls = {"render": 0}
 
     class _FakeResp:
-        text = "<html><body><article>" + "<p>Long paragraph with real content.</p>" * 10 + "</article></body></html>"
+        text = (
+            "<html><body><article>"
+            + "<p>Long paragraph with real content.</p>" * 10
+            + "</article></body></html>"
+        )
         url = "https://plain.example/"
 
         def raise_for_status(self):
@@ -586,6 +598,7 @@ def test_fetch_url_no_playwright_when_text_rich(monkeypatch) -> None:
 
 # --- multimodal passthrough ---------------------------------------------------
 
+
 def test_agent_forwards_images_to_llm() -> None:
     llm = FakeLLM(
         responses=[
@@ -594,7 +607,9 @@ def test_agent_forwards_images_to_llm() -> None:
         ]
     )
     agent = _agent(llm)
-    reply, _ = agent.run("what is in this image?", images=["img1.png", "data:image/png;base64,AAAA"])
+    reply, _ = agent.run(
+        "what is in this image?", images=["img1.png", "data:image/png;base64,AAAA"]
+    )
     assert reply == "seen it"
     assert llm.sent_tools[0] is not None  # first call went out with tools
     assert llm.sent_images[0] == ["img1.png", "data:image/png;base64,AAAA"]

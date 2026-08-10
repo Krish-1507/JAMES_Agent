@@ -40,6 +40,7 @@ def _image_payload(image: str) -> tuple[str, str]:
         return mime, base64.b64encode(path.read_bytes()).decode("ascii")
     return "image/png", image
 
+
 # ---------------------------------------------------------------------------
 # OpenAI-compatible (OpenAI / OpenRouter / Groq / custom)
 # ---------------------------------------------------------------------------
@@ -179,9 +180,7 @@ class AnthropicProvider(LLMProvider):
                 blocks = []
             for img in images:
                 if img.startswith(("http://", "https://")):
-                    blocks.append(
-                        {"type": "image", "source": {"type": "url", "url": img}}
-                    )
+                    blocks.append({"type": "image", "source": {"type": "url", "url": img}})
                 else:
                     media_type, data = _image_payload(img)
                     blocks.append(
@@ -421,13 +420,9 @@ class GeminiProvider(LLMProvider):
                 else:
                     media_type, b64 = _image_payload(img)
                     parts.append(
-                        T.Part(
-                            inline_data=T.Blob(
-                                mime_type=media_type, data=_b64.b64decode(b64)
-                            )
-                        )
+                        T.Part(inline_data=T.Blob(mime_type=media_type, data=_b64.b64decode(b64)))
                     )
-            except Exception:
+            except Exception:  # nosec B112 - one bad image must not drop the whole turn
                 continue
         return parts
 

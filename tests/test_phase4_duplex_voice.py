@@ -447,7 +447,7 @@ def test_controller_interrupt_and_mute(monkeypatch):
 
 
 def test_controller_exit_command_stops(monkeypatch):
-    controller, sessions = _make_controller(monkeypatch, wake="none", idle_timeout=30)
+    controller, _ = _make_controller(monkeypatch, wake="none", idle_timeout=30)
     controller._on_user_text("exit")
     assert controller._stop_evt.is_set()
 

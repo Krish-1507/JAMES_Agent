@@ -24,7 +24,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pytest pytest-cov ruff
+          pip install pytest pytest-cov "ruff==0.16.2"
       - name: Lint (ruff)
         run: ruff check james tests
       - name: Compile all modules
