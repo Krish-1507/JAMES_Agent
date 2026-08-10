@@ -26,7 +26,7 @@ The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contai
 
 ## Project status
 
-JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, voice providers, memory, encrypted history, optional offline operation, a constrained Skill Forge, and a documented plugin SDK (`james.sdk`).
+JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, voice providers, memory, encrypted history, optional offline operation, a constrained Skill Forge, and a documented plugin SDK (`james.sdk`). The agent loop plans before acting, retries transient tool errors, runs independent tool calls in parallel, and compacts long contexts; web tools offer multi-engine search, main-content extraction, and JS-page rendering.
 
 ### Promotion readiness
 

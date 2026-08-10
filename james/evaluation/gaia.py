@@ -48,7 +48,10 @@ GAIA_SYSTEM_PROMPT = (
     "markdown, or bold, and never put any text after it — so a grader can "
     "read the answer directly off the last line. Never emit inline "
     "tool-calling markup such as <|DSML|> or <search> in your reply, and "
-    "never describe tool usage in the final answer."
+    "never describe tool usage in the final answer. Plan then act: for a "
+    "multi-step task, write a short numbered plan as plain text (PLAN: 1) ... "
+    "2) ...) in the SAME message as your first tool call, then execute it. "
+    "Never let intermediate results leak into the final answer."
 )
 VALIDATION_SUBSET = "2023/validation"
 
@@ -488,6 +491,10 @@ def run_gaia_suite(
         )
         tr.success = is_correct(tr.output, entry["metadata"]["answer"])
         results.append(tr)
+        # Persist after every task so a crash or kill never loses the whole
+        # run — with tool-using agents a suite can run for tens of minutes.
+        suite.results = results
+        evaluator._save_results(suite)
 
     suite.results = results
     evaluator._save_results(suite)

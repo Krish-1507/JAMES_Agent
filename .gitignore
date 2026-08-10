@@ -58,3 +58,6 @@ keys.py
 data.txt
 output.txt
 *.docx
+
+# Local guardian scan cache
+.guardian/

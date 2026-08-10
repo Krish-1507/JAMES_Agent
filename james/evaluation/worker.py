@@ -81,6 +81,9 @@ def _run_task(payload: dict) -> dict:
         confirm_dangerous=False,
         nudge=False,
         system_prompt=payload.get("system_prompt"),
+        require_plan=True,
+        compact_threshold_chars=120_000,
+        max_tools=64,
     )
     agent.on_tool = _on_tool
 

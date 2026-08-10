@@ -34,6 +34,19 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
   the same kind of request comes up again, conversation summaries persist to
   long-term memory for cross-session recall, and the marketplace can publish
   and re-install skills (`publish_skill`, `install_plugin`).
+- Agentic quality features: plan-then-act (the model states a short plan
+  before acting, with a corrective nudge when it forgets), self-correction
+  (tool errors are classified as transient/permanent — rate limits and
+  timeouts are retried once automatically, failures surface with recovery
+  hints), parallel tool calls (independent calls run concurrently while
+  stateful browser/desktop tools stay serial), and mid-task context
+  compaction (long conversations are summarized to fit the model's window).
+- Richer web tools: main-content extraction (navigation, ads and sidebars
+  stripped), multi-engine search (Tavily/Brave when keys are set, DuckDuckGo
+  fallback), link discovery, and automatic headless-browser rendering for
+  JavaScript-only pages.
+- Multimodal input across providers: attach images to any turn for OpenAI,
+  Anthropic, and Gemini vision models.
 - Optional offline mode that blocks non-loopback network egress.
 - A lightweight PyQt orb UI and local web dashboard.
 
@@ -190,7 +203,7 @@ JAMES is **not** a hardened OS sandbox. Spawned workers reduce blast radius but 
 | Desktop | Screenshots, keyboard and pointer automation, vision-assisted computer use |
 | Memory | Local recall and persistent memory facts |
 | Scheduling | Reminders and tightly restricted scheduled read-only commands |
-| Integrations | Configured MCP servers and selected web tools |
+| Integrations | Configured MCP servers and web tools: multi-engine search (Tavily/Brave/DuckDuckGo), main-content extraction, link discovery, JS-page rendering |
 | Voice | Offline and hosted STT/TTS providers |
 
 Use `help` in JAMES to inspect tools enabled in the current configuration.
@@ -222,7 +235,10 @@ JAMES ships a GAIA benchmark harness in `james/evaluation/` that scores the
 agent with a faithful port of the official answer matcher (quasi-exact match,
 number/percent closeness), isolates every task in a fresh subprocess worker
 with a hard timeout, and records per-task `tool_calls`/`iterations` plus
-level-stratified pass rates.
+level-stratified pass rates. Eval runs use the upgraded agent loop (plan-then-
+act, transient-error retries, parallel tool calls, context compaction) pinned
+to a single model per run, and persist results after every task so a crashed
+or killed suite never loses completed work.
 
 ```bash
 python -m james --eval smoke                                        # offline pipeline check (no API key)
@@ -258,6 +274,14 @@ VOICE_ENABLED=false
 
 `ALLOWED_TOOLS` is an allowlist. If it is populated, tools outside it are denied.
 
+Optional web-search keys improve `web_search` results (engine=`auto` picks
+Tavily, then Brave, then DuckDuckGo):
+
+```dotenv
+TAVILY_API_KEY=...
+BRAVE_API_KEY=...
+```
+
 ## Architecture
 
 ```text
@@ -271,7 +295,10 @@ input (text / voice / UI)
 
 Core modules:
 
-- `james/core/agent.py` — LLM tool-call loop and confirmation handling.
+- `james/core/agent.py` — LLM tool-call loop: plan-then-act, transient-error
+  retries, parallel tool calls, context compaction, and confirmation handling.
+- `james/tools/web_tools.py` — multi-engine search, main-content extraction,
+  link discovery, and JS-page rendering.
 - `james/tools/registry.py` — tool registration, permissions, rate limit, audit trail, plugin boundary.
 - `james/core/command_policy.py` — shell-free read-only command policy.
 - `james/tools/forge_tools.py` — constrained generated-skill runtime.

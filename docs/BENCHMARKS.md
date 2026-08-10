@@ -14,10 +14,17 @@ the same code that runs in CI (`evaluation/`).
   well-calibrated, terse final answer matters as much as the reasoning steps.
 - Eval runs are pinned to a single model: the worker disables provider
   failover, so every task in a run is served by the configured primary.
+- Runs use the full agent loop: **plan-then-act** (a corrective nudge if the
+  first tool-using reply skips the plan), **transient-error retries** (rate
+  limits/timeouts retried once with backoff), **parallel tool calls** for
+  independent calls, and **context compaction** for long tasks. Tool schemas
+  are clipped to the provider's limit (64) so the request is never rejected.
 - Scores are computed with a faithful port of the official GAIA scorer in
   `james/evaluation/gaia.py`, not a reimplementation in the evaluation loop.
 - Each task runs in an **isolated subprocess** with a hard timeout (no
   time-travel attribution, no retries from the harness).
+- Results are persisted **after every task**, so a crashed or killed suite
+  never loses completed work.
 - Runs report `tool_calls` and `iterations` per task so you can see whether
   the agent is gaining from its tools or spinning.
 
@@ -59,8 +66,22 @@ no network, no API key. It must always pass before a real run is trusted.
 ## Results
 
 | Date | Provider / model | Split | Tasks | Pass rate | Level 1 | Level 2 | Level 3 | Command |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| (no runs yet) | — | validation | — | — | — | — | — | `--eval gaia` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-08-09 | custom / deepseek-ai/deepseek-v4-flash-0731 | validation | 10 | 100.0% | 100.0% (3/3) | 100.0% (7/7) | — | `--eval gaia --eval-dir …/phase1_subset` |
+
+Notes:
+
+- The 2026-08-09 run is the pre-Phase-1 baseline on the 10-task dev subset
+  (3 Level-1 + 7 Level-2): the model answered every task in one iteration
+  with zero tool calls.
+- On 2026-08-10 the NVIDIA NIM endpoint serving the same model id changed
+  behavior (verbose narration instead of bare answers, 40-110 s calls, first-
+  call timeouts); the phase-1 agent changes are covered by unit tests, and the
+  suite was re-measured on gemini-2.5-flash (1/10, free-tier 429 quota
+  exhausted mid-run) and openrouter gemma-4-26b-a4b-it:free (0/3, flaky free
+  route). The upgraded agent did pass a Level-2 task end-to-end on gemini
+  with real tool use (4 calls, 6 iterations). Re-run on a healthy endpoint
+  for the authoritative comparison.
 
 Runs are published here after they pass `--eval smoke`. The GitHub Actions
 `Eval` workflow runs nightly (and on manual dispatch): it always runs the

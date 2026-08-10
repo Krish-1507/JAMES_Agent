@@ -261,6 +261,7 @@ class ToolRegistry:
         self._call_times: list[float] = []
         self._max_calls_per_minute = 60
         self._rate_lock = threading.Lock()
+        self._audit_lock = threading.Lock()
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
@@ -340,7 +341,7 @@ class ToolRegistry:
                 hashlib.sha256,
             ).hexdigest()
             signed = f"{digest} | {line}"
-            with open(settings.assistant.audit_log, "a", encoding="utf-8") as f:
+            with self._audit_lock, open(settings.assistant.audit_log, "a", encoding="utf-8") as f:
                 f.write(signed)
         except Exception:  # nosec B110 - a write failure must not break the tool call
             pass

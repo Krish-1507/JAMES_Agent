@@ -7,10 +7,38 @@
 
 from __future__ import annotations
 
+import base64
 import json
+from pathlib import Path
 from typing import Any
 
 from .base import LLMProvider, LLMResponse, Message, Tool, ToolCall
+
+
+def _image_payload(image: str) -> tuple[str, str]:
+    """Return (media_type, base64-data) for an image reference.
+
+    Accepts data URIs (``data:image/png;base64,...``), local file paths, and
+    raw base64 (assumed PNG).
+    """
+    if image.startswith("data:"):
+        head, _, b64 = image.partition(",")
+        mime = head[5:].split(";")[0] or "image/png"
+        return mime, b64
+    if image.startswith(("http://", "https://")):
+        raise ValueError("http(s) images must be fetched before encoding")
+    path = Path(image)
+    if path.exists():
+        mime = "image/png"
+        suffix = path.suffix.lower()
+        if suffix in (".jpg", ".jpeg"):
+            mime = "image/jpeg"
+        elif suffix == ".webp":
+            mime = "image/webp"
+        elif suffix == ".gif":
+            mime = "image/gif"
+        return mime, base64.b64encode(path.read_bytes()).decode("ascii")
+    return "image/png", image
 
 # ---------------------------------------------------------------------------
 # OpenAI-compatible (OpenAI / OpenRouter / Groq / custom)
@@ -135,6 +163,38 @@ class AnthropicProvider(LLMProvider):
             raise RuntimeError("Missing ANTHROPIC_API_KEY.")
 
     @staticmethod
+    def _attach_images(messages: list[Message], images: list[str]) -> list[Message]:
+        """Attach images to the last user message as Anthropic image blocks."""
+        out = list(messages)
+        for i in range(len(out) - 1, -1, -1):
+            m = out[i]
+            if m.get("role") != "user":
+                continue
+            content = m.get("content")
+            if isinstance(content, list):
+                blocks = list(content)
+            elif content:
+                blocks = [{"type": "text", "text": content}]
+            else:
+                blocks = []
+            for img in images:
+                if img.startswith(("http://", "https://")):
+                    blocks.append(
+                        {"type": "image", "source": {"type": "url", "url": img}}
+                    )
+                else:
+                    media_type, data = _image_payload(img)
+                    blocks.append(
+                        {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": media_type, "data": data},
+                        }
+                    )
+            out[i] = {**m, "content": blocks}
+            break
+        return out
+
+    @staticmethod
     def _to_anthropic_tools(tools: list[Tool]) -> list[dict[str, Any]]:
         out = []
         for t in tools:
@@ -209,6 +269,8 @@ class AnthropicProvider(LLMProvider):
         model: str | None = None,
     ) -> LLMResponse:
         system, conv = self._split_system(messages)
+        if images:
+            conv = self._attach_images(conv, images)
         anthropic_messages = self._to_anthropic_messages(conv)
         kwargs: dict[str, Any] = dict(
             model=self.model,
@@ -301,11 +363,14 @@ class GeminiProvider(LLMProvider):
             )
         return [T.Tool(function_declarations=declarations)]
 
-    def _to_gemini_contents(self, messages: list[Message]):
+    def _to_gemini_contents(self, messages: list[Message], images: list[str] | None = None):
         T = self._types
         mapping = {"user": "user", "assistant": "model", "tool": "user", "system": "user"}
         contents = []
-        for m in messages:
+        last_user_idx = max(
+            (i for i, m in enumerate(messages) if m.get("role") == "user"), default=-1
+        )
+        for i, m in enumerate(messages):
             role = mapping.get(m["role"], "user")
             if m["role"] == "tool":
                 contents.append(
@@ -329,10 +394,42 @@ class GeminiProvider(LLMProvider):
                     )
                 contents.append(T.Content(role="model", parts=parts))
             else:
-                contents.append(
-                    T.Content(role=role, parts=[T.Part(text=str(m.get("content", "")))])
-                )
+                parts: list = [T.Part(text=str(m.get("content", "")))]
+                if images and i == last_user_idx:
+                    parts.extend(self._gemini_image_parts(images))
+                contents.append(T.Content(role=role, parts=parts))
         return contents
+
+    def _gemini_image_parts(self, images: list[str]) -> list:
+        T = self._types
+        import base64 as _b64
+
+        parts: list = []
+        for img in images:
+            try:
+                if img.startswith(("http://", "https://")):
+                    import requests
+
+                    data = requests.get(img, timeout=15).content
+                    parts.append(
+                        T.Part(
+                            inline_data=T.Blob(
+                                mime_type="image/png", data=_b64.b64encode(data).decode("ascii")
+                            )
+                        )
+                    )
+                else:
+                    media_type, b64 = _image_payload(img)
+                    parts.append(
+                        T.Part(
+                            inline_data=T.Blob(
+                                mime_type=media_type, data=_b64.b64decode(b64)
+                            )
+                        )
+                    )
+            except Exception:
+                continue
+        return parts
 
     def chat(
         self,
@@ -352,20 +449,25 @@ class GeminiProvider(LLMProvider):
 
         resp = self._get_client().models.generate_content(
             model=model or self.model,
-            contents=self._to_gemini_contents(messages),
+            contents=self._to_gemini_contents(messages, images),
             config=config,
         )
         text = ""
         tool_calls: list[ToolCall] = []
         if resp.candidates:
-            for part in resp.candidates[0].content.parts:
-                fc = getattr(part, "function_call", None)
-                if fc is not None:
-                    tool_calls.append(
-                        ToolCall(id=fc.id or "", name=fc.name, arguments=dict(fc.args or {}))
-                    )
-                elif getattr(part, "text", None):
-                    text += part.text
+            # A candidate may legitimately carry no content (safety-filtered,
+            # empty, or function-call-only responses on some SDK versions) —
+            # treat that as an empty response instead of crashing.
+            content = getattr(resp.candidates[0], "content", None)
+            if content is not None:
+                for part in content.parts:
+                    fc = getattr(part, "function_call", None)
+                    if fc is not None:
+                        tool_calls.append(
+                            ToolCall(id=fc.id or "", name=fc.name, arguments=dict(fc.args or {}))
+                        )
+                    elif getattr(part, "text", None):
+                        text += part.text
         # Also read the convenience aggregate (used when candidates aren't present).
         for fc in resp.function_calls or []:
             if fc.name not in {tc.name for tc in tool_calls}:

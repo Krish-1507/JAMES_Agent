@@ -35,6 +35,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs it (and commits the update) after every successful GAIA run.
 - `read_document` now reads **ODS spreadsheets** (odfpy; added to the
   `docs`/`all` extras), completing the docx/pptx/xlsx/csv/tsv/ods family.
+- **Agent quality (Phase 1)** — `james/core/agent.py` reasoning-loop upgrade:
+  - **Plan-then-act**: the model is asked to state a short numbered plan in
+    the same message as its first tool call; `Agent(require_plan=True)` injects
+    a single corrective nudge if the first tool-using reply skips it.
+  - **Self-correction**: tool errors are classified as transient/permanent
+    (`classify_tool_error`). Transient failures (rate limits, timeouts,
+    connection errors, 5xx) are retried once automatically with backoff; if
+    the retry also fails the result carries a "try a different approach"
+    marker. Permanent errors (invalid args, not found, denied) are never
+    blindly re-attempted.
+  - **Parallel tool calls**: independent calls from one model reply run in a
+    small thread pool (`max_parallel`, default 4); stateful browser/desktop
+    tools run serially; results always come back in call order. The registry
+    audit writer is thread-safe (`_audit_lock`).
+  - **Context compaction**: once the conversation exceeds
+    `compact_threshold_chars`, older turns are summarized into a single digest
+    by the LLM (counting `Agent.compactions`); the tail of the conversation is
+    preserved verbatim.
+  - **Provider tool caps**: `Agent(max_tools=N)` clips the schema list before
+    sending (Anthropic and OpenRouter reject >64 tools per request).
+- **Web tool upgrade** (`james/tools/web_tools.py`):
+  - Main-content extraction: nav/ads/sidebars are stripped before reading
+    (`extract_main_text`).
+  - Multi-engine search: `web_search(engine="auto")` uses Tavily or Brave
+    when `TAVILY_API_KEY`/`BRAVE_API_KEY` are set, else DuckDuckGo (no key).
+  - Link discovery: `fetch_url(include_links=True)` returns the page's links
+    for site exploration.
+  - JS-only pages: `fetch_url` re-renders SPA shells with headless Playwright
+    when the plain fetch yields almost no text.
+- **Multimodal input across providers**: `Agent.run(images=...)` and
+  `Assistant.think(..., images=...)` accept file paths / data URIs / URLs for
+  vision models. Anthropic (base64/url image blocks) and Gemini (inline_data)
+  previously ignored the `images` argument and now attach them; OpenAI-
+  compatible providers already supported them.
+- **Eval harness resilience**: `run_gaia_suite` persists results after every
+  task, so a crashed or killed suite never loses completed work; the eval
+  worker sets `max_tools=64` to stay under provider request limits.
+
+### Fixed (real-run hardening, validated on live GAIA data)
+- `GeminiProvider.chat` crashed with `AttributeError: 'NoneType' object has no
+  attribute 'parts'` when a candidate carried no content (safety-filtered or
+  function-call-only responses); empty candidates now yield an empty response.
+- Anthropic and Gemini providers accepted but silently dropped the `images`
+  argument on vision-capable models; both now attach images to the last user
+  turn.
+- The registry audit writer could interleave entries when tool calls ran
+  concurrently; audit writes are now serialized with a lock.
+- `docs/BENCHMARKS.md` now carries the first real result (2026-08-09,
+  10/10 on the 10-task dev subset) with methodology notes covering the
+  Phase-1 agent loop.
 
 ### Fixed (real-run hardening, validated on live GAIA data)
 - Eval workers now pin the provider chain (`settings.llm.failover = []`):

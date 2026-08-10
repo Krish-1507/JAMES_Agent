@@ -14,7 +14,8 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
 │ Assistant (sessions, history, memory,      │
 │           skills, events, switch_model)     │
 ├────────────────────────────────────────────┤
-│ Agent (LLM provider + ToolRegistry)        │
+│ Agent (plan-then-act, error recovery,      │
+│       parallel calls, compaction)          │
 ├────────────────────────────────────────────┤
 │ ToolRegistry (execute gate: audit, limits, │
 │              modes)                        │
@@ -30,9 +31,21 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
   the registry, the LLM provider, voice providers, encrypted history,
   per-session state, and hooks for the GUI. It is the integration point the
   front ends use.
+- **`james.core.agent.Agent`** — the reasoning loop. Before acting it asks the
+  model to state a short plan (and nudges once when `require_plan` is set and
+  the first tool-using reply skips it). Tool errors are classified: transient
+  failures (rate limits, timeouts, 5xx) are retried once with backoff, and
+  permanent ones surface to the model with a recovery hint. Independent tool
+  calls from one reply run concurrently (stateful browser/desktop tools stay
+  serial). When the conversation outgrows a size threshold, older turns are
+  summarized by the LLM into one compact digest.
 - **`james.tools.registry.ToolRegistry`** — the single gated entry point for
   capability execution. `execute()` applies rate limiting, allowed/denied
-  lists, mode tiers, dry-run, and HMAC-signed audit logging.
+  lists, mode tiers, dry-run, and HMAC-signed audit logging (thread-safe for
+  parallel calls).
+- **`james.tools.web_tools`** — multi-engine search (Tavily/Brave when keys
+  are configured, DuckDuckGo fallback), main-content extraction, link
+  discovery, and Playwright fallback rendering for JavaScript-only pages.
 - **`james.tools.base`** — the tool framework: `Tool`, `FunctionTool`,
   `ToolResult`, and the `tool` decorator.
 - **`james.llm`** — pluggable LLM providers (OpenAI, Anthropic, Gemini,

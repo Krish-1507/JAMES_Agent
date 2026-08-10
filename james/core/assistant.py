@@ -457,7 +457,7 @@ class Assistant:
         except Exception as exc:
             self.log.warning("TTS error: %s", exc)
 
-    def think(self, user_text: str) -> str:
+    def think(self, user_text: str, images: list[str] | None = None) -> str:
         from ..tools.forge_tools import get_relevant_skills
         from ..tools.memory_tools import get_relevant_memories
 
@@ -481,7 +481,7 @@ class Assistant:
         prompt = "\n\n".join([*hints, user_text]) if hints else user_text
 
         prev_len = len(self.history[-20:])
-        reply, self.history = self.agent.run(prompt, history=self.history[-20:])
+        reply, self.history = self.agent.run(prompt, history=self.history[-20:], images=images)
         self._maybe_auto_forge(user_text, self.history, prev_len)
         self._summarize_history()
 
