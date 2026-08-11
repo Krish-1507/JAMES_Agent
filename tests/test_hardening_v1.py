@@ -181,7 +181,9 @@ def test_ui_approval_allow_once_via_http(monkeypatch: pytest.MonkeyPatch) -> Non
         client = TestClient(create_app(runtime))
         req_id = None
         for _ in range(100):
-            pending = [e for e in runtime.bus.drain(0)[0] if e["payload"]["type"] == "approval_requested"]
+            pending = [
+                e for e in runtime.bus.drain(0)[0] if e["payload"]["type"] == "approval_requested"
+            ]
             if pending:
                 req_id = pending[-1]["payload"]["id"]
                 break

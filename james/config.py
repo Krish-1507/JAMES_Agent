@@ -217,9 +217,9 @@ class VoiceSettings:
         default_factory=lambda: int(_env("MIC_DEVICE_INDEX")) if _env("MIC_DEVICE_INDEX") else None
     )
     speaker_device_index: int | None = field(
-        default_factory=lambda: int(_env("SPEAKER_DEVICE_INDEX"))
-        if _env("SPEAKER_DEVICE_INDEX")
-        else None
+        default_factory=lambda: (
+            int(_env("SPEAKER_DEVICE_INDEX")) if _env("SPEAKER_DEVICE_INDEX") else None
+        )
     )
 
     # Full-duplex voice: "off" | "auto" | "gemini_live" | "openai_realtime" | "local"
@@ -247,6 +247,28 @@ class VoiceSettings:
     # Voice activity detection / barge-in sensitivity (0..1 RMS levels).
     vad_threshold: float = field(default_factory=lambda: _float("VAD_THRESHOLD", 0.02))
     barge_in_threshold: float = field(default_factory=lambda: _float("BARGE_IN_THRESHOLD", 0.03))
+
+
+@dataclass
+class GatewaySettings:
+    enabled: bool = field(default_factory=lambda: _bool("GATEWAY_ENABLED", False))
+    # Telegram Bot API
+    telegram_token: str = field(default_factory=lambda: _env("TELEGRAM_BOT_TOKEN"))
+    # Discord bot
+    discord_token: str = field(default_factory=lambda: _env("DISCORD_BOT_TOKEN"))
+    # Slack Socket Mode
+    slack_app_token: str = field(default_factory=lambda: _env("SLACK_APP_TOKEN"))
+    slack_bot_token: str = field(default_factory=lambda: _env("SLACK_BOT_TOKEN"))
+    # Twilio WhatsApp
+    twilio_account_sid: str = field(default_factory=lambda: _env("TWILIO_ACCOUNT_SID"))
+    twilio_auth_token: str = field(default_factory=lambda: _env("TWILIO_AUTH_TOKEN"))
+    twilio_whatsapp_from: str = field(default_factory=lambda: _env("TWILIO_WHATSAPP_FROM"))
+    # Inbound allowlist (sender ids or chat ids); empty = accept all.
+    allow_from: list[str] = field(
+        default_factory=lambda: [
+            s.strip() for s in _env("GATEWAY_ALLOW_FROM", "").split(",") if s.strip()
+        ]
+    )
 
 
 @dataclass
@@ -341,6 +363,7 @@ class Settings:
     llm: LLMSettings = field(default_factory=LLMSettings)
     voice: VoiceSettings = field(default_factory=VoiceSettings)
     assistant: AssistantSettings = field(default_factory=AssistantSettings)
+    gateway: GatewaySettings = field(default_factory=GatewaySettings)
 
     def __post_init__(self):
         self.assistant.workspace_dir.mkdir(parents=True, exist_ok=True)

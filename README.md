@@ -53,6 +53,25 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
   JavaScript-only pages.
 - Multimodal input across providers: attach images to any turn for OpenAI,
   Anthropic, and Gemini vision models.
+- **One-click integrations** (web UI → Integrations): a curated catalog of
+  default MCP servers — filesystem, fetch, browser automation (Playwright),
+  GitHub, Slack, Notion, Gmail, sequential thinking — toggled live without a
+  restart; their tools appear in the registry instantly.
+- **Windows app automation**: drive the user's real Office applications over
+  COM — read/send Outlook email, create calendar events, read/write Excel
+  cells (live Excel or openpyxl), extract Word text, build PowerPoint decks —
+  plus desktop notifications (`notify`).
+- **Recipes** — persisted multi-step automations with a schedule
+  (`daily 09:00`, `hourly`, `every N minutes`). Ask JAMES in plain language
+  ("every morning summarize my emails and notify me") and it composes the
+  tool steps itself, saves the recipe, and runs it in the background.
+- **Messaging gateway**: bridge Telegram, WhatsApp (Twilio), Discord and
+  Slack to the same agent core (`james --gateway`). Messages from any chat
+  become agent turns; replies return to the same chat, and the agent can
+  push messages proactively with `send_message`.
+- **Cloud plugin registry**: the marketplace syncs a GitHub-hosted catalog
+  (`update_marketplace` or the Integrations page). Remote plugins still
+  require an Ed25519 signature before they can run.
 - Optional offline mode that blocks non-loopback network egress.
 - A browser-based desktop UI (`james` or `james --serve`): a dependency-free
   single-page app with streaming chat threads, live tool activity, a model
@@ -93,6 +112,7 @@ james              # desktop shell (Qt window, or browser fallback)
 james --serve      # web UI in your default browser (http://127.0.0.1:8124)
 james --text       # terminal CLI
 james --voice      # terminal voice mode
+james --gateway    # headless messaging-gateway mode (Telegram/WhatsApp/Discord/Slack)
 james --setup      # re-run the wizard anytime
 ```
 
@@ -408,10 +428,12 @@ before JAMES can be recommended to general users are listed in the next section.
       results will fill the table as runs land.
 - [ ] **Broader automated test coverage.** The suite exercises every security boundary
       (egress guard, worker isolation, agent confirmation, skill runtime, plugin
-      signing), the core agent/assistant paths, and the full-duplex voice stack
-      (VAD, controller, all three session engines, and streaming-TTS barge-in).
-      UI, browser, and document tools still have thin coverage. Target ≥80% on
-      security-critical modules before recommending JAMES to non-technical users.
+      signing), the core agent/assistant paths, the full-duplex voice stack
+      (VAD, controller, all three session engines, and streaming-TTS barge-in),
+      and all Phase-4 surfaces (integrations, recipes, gateway, Office tools,
+      cloud plugin registry). UI, browser, and document tools still have thin
+      coverage. Target ≥80% on security-critical modules before recommending
+      JAMES to non-technical users.
 - [ ] **macOS signed artifacts.** The test matrix now covers macOS (Ubuntu +
       Windows + macOS across Python 3.10-3.12); OIDC-signed release artifacts
       still build on Linux only, which is fine because the wheel is a pure-Python

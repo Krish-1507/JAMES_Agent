@@ -174,6 +174,15 @@ _SERIAL_TOOLS = {
     "clipboard",
     "manage_files",
     "schedule_task",
+    "outlook_read_inbox",
+    "outlook_send_email",
+    "outlook_create_event",
+    "excel_read_cells",
+    "excel_write_cells",
+    "word_read_document",
+    "powerpoint_create",
+    "run_recipe_now",
+    "send_message",
 }
 
 _PLAN_RE = re.compile(r"\bplan\b\s*[:：]", re.IGNORECASE)  # noqa: RUF001 - fullwidth colon is intentional
@@ -329,10 +338,10 @@ class Agent:
 
         results: dict[int, str] = {}
         if parallel and self.parallel_tool_calls:
-            with ThreadPoolExecutor(
-                max_workers=min(self.max_parallel, len(parallel))
-            ) as pool:
-                future_map = {pool.submit(self._run_one_tool, tc): i for i, tc in enumerate(parallel)}
+            with ThreadPoolExecutor(max_workers=min(self.max_parallel, len(parallel))) as pool:
+                future_map = {
+                    pool.submit(self._run_one_tool, tc): i for i, tc in enumerate(parallel)
+                }
                 for future in as_completed(future_map):
                     idx = future_map[future]
                     try:
@@ -456,11 +465,7 @@ class Agent:
                 return reply, _history_out()
 
             # Plan-then-act enforcement (single corrective nudge).
-            if (
-                self.require_plan
-                and not plan_nudged
-                and not self._plan_present(resp.content)
-            ):
+            if self.require_plan and not plan_nudged and not self._plan_present(resp.content):
                 messages.append({"role": "system", "content": _PLAN_NUDGE})
                 plan_nudged = True
                 continue

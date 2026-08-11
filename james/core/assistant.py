@@ -40,6 +40,8 @@ from ..tools.file_manager_tools import (
     stop_file_manager_daemon,
 )
 from ..tools.forge_tools import configure_forge
+from ..tools.gateway_tools import configure_gateway
+from ..tools.recipes_tools import configure_recipes
 from ..tools.registry import ToolRegistry
 from ..tools.research_tools import configure_research
 from ..ui.cli import create_cli
@@ -143,6 +145,27 @@ class Assistant:
         if settings.assistant.auto_file_manager:
             start_file_manager_daemon()
         scheduler.start()
+        # Phase-4: recipes engine (persisted multi-step automations).
+        from ..core.recipes import RecipeEngine
+
+        self.recipe_engine = RecipeEngine(self.registry)
+        self.recipe_engine.start()
+        configure_recipes(self.recipe_engine, self.llm)
+        # Phase-4: messaging gateway (Telegram/WhatsApp/Discord/Slack).
+        self.gateway = None
+        if settings.gateway.enabled:
+            try:
+                from ..gateway.manager import GatewayManager
+
+                self.gateway = GatewayManager(self)
+                self.gateway.start()
+                self.log.info(
+                    "Gateway enabled: %s",
+                    ", ".join(c.name for c in self.gateway.channels) or "no channels",
+                )
+            except Exception as exc:
+                self.log.warning("Gateway failed to start: %s", exc)
+        configure_gateway(self.gateway)
         self.on_event = None  # GUI hook: receives dict events (type: user|thinking|reply|speak)
 
     # ---- live tool hooks (console by default, GUI overrides via set_tool_hooks) ----
@@ -221,6 +244,7 @@ class Assistant:
         configure_research(self.llm)
         configure_background(self.llm)
         configure_file_manager(self.llm)
+        configure_recipes(getattr(self, "recipe_engine", None), self.llm)
         with suppress(Exception):
             save_llm_config(provider, model)
         self.log.info("Switched model -> provider=%s model=%s", provider, model)
@@ -579,7 +603,9 @@ class Assistant:
             return
         if self._text_queue is not None:
             # GUI mode: typed text must stay first-class in every voice loop.
-            threading.Thread(target=self._text_drain_loop, name="voice-text-drain", daemon=True).start()
+            threading.Thread(
+                target=self._text_drain_loop, name="voice-text-drain", daemon=True
+            ).start()
         engine = (settings.assistant.wake_engine or "always").lower()
         if engine == "none":
             self.speak("Listening continuously. Say 'exit' or 'stop' to quit.")
@@ -803,4 +829,8 @@ class Assistant:
                 self.text_loop()
         finally:
             stop_file_manager_daemon()
+            if getattr(self, "gateway", None) is not None:
+                self.gateway.stop()
+            if getattr(self, "recipe_engine", None) is not None:
+                self.recipe_engine.stop()
             scheduler.stop()

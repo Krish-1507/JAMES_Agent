@@ -9,15 +9,119 @@ same constrained runtime as Skill Forge before it is persisted or loaded.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+import requests  # nosec B113 - HTTPS fetch of the public cloud catalog
 
 from ...config import settings
 from ...sdk.signing import verify_plugin_signature
 from ..base import ToolResult, tool
 
 _MARKETPLACE_FILE = Path(__file__).resolve().parents[2] / "marketplace.json"
+
+# Cloud plugin registry: a plain JSON catalog published on GitHub (or any
+# static host). JAMES merges it into the local catalog on demand; installs
+# still require a valid Ed25519 signature, so a remote entry can never inject
+# unverified code.
+DEFAULT_MARKETPLACE_URL = (
+    "https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/marketplace/plugins.json"
+)
+
+
+def marketplace_url() -> str:
+    return os.getenv("MARKETPLACE_URL", DEFAULT_MARKETPLACE_URL).strip() or DEFAULT_MARKETPLACE_URL
+
+
+def _marketplace_state_file() -> Path:
+    return settings.assistant.workspace_dir / "marketplace_state.json"
+
+
+def _load_marketplace_state() -> dict[str, Any]:
+    path = _marketplace_state_file()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # nosec B110 - corrupt state falls back to empty
+        return {}
+
+
+def _save_marketplace_state(state: dict[str, Any]) -> None:
+    _marketplace_state_file().write_text(
+        json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def marketplace_status() -> dict[str, Any]:
+    """UI-facing status of the cloud registry without touching the network."""
+    state = _load_marketplace_state()
+    return {
+        "url": marketplace_url(),
+        "synced_at": state.get("synced_at"),
+        "remote_count": int(state.get("remote_count", 0)),
+        "local_count": int(state.get("local_count", 0)),
+    }
+
+
+def sync_remote_catalog(url: str | None = None) -> dict[str, Any]:
+    """Fetch the cloud catalog and merge it into the local marketplace.
+
+    Remote entries replace local ones with the same name and are marked
+    ``source: "remote"``. Local entries (including published skills) are kept.
+    Install-time Ed25519 verification is unchanged, so code from the cloud
+    must still be signed by a trusted key to run.
+    """
+    target = (url or marketplace_url()).strip()
+    try:
+        response = requests.get(target, timeout=20)
+        response.raise_for_status()
+        remote = response.json()
+    except Exception as exc:
+        return {"ok": False, "error": f"Could not fetch {target}: {exc}"}
+    if not isinstance(remote, list):
+        return {"ok": False, "error": "Cloud catalog must be a JSON list of plugins."}
+    valid = []
+    for entry in remote:
+        if isinstance(entry, dict) and entry.get("name") and entry.get("description"):
+            entry = dict(entry)
+            entry["source"] = "remote"
+            valid.append(entry)
+    local = _load_catalog()
+    by_name = {str(p.get("name")): p for p in local}
+    for entry in valid:
+        by_name[str(entry["name"])] = entry
+    merged = list(by_name.values())
+    _save_catalog(merged)
+    _save_marketplace_state(
+        {
+            "url": target,
+            "synced_at": datetime.now().isoformat(timespec="seconds"),
+            "remote_count": len(valid),
+            "local_count": len(merged),
+        }
+    )
+    return {
+        "ok": True,
+        "added": len(valid),
+        "total": len(merged),
+        "message": f"Merged {len(valid)} plugin(s) from the cloud registry ({len(merged)} total).",
+    }
+
+
+@tool(
+    "update_marketplace",
+    "Sync the plugin marketplace with the cloud registry (GitHub-hosted catalog).",
+    {},
+)
+def update_marketplace() -> ToolResult:
+    result = sync_remote_catalog()
+    if not result["ok"]:
+        return ToolResult(ok=False, output=result["error"])
+    return ToolResult(ok=True, output=result["message"])
+
 
 _BUILTIN_CATALOG: list[dict[str, Any]] = [
     {

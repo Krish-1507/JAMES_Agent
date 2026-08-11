@@ -4,6 +4,49 @@ All notable changes to JAMES are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Phase 4: app automation + scale
+- **One-click MCP integrations** (`james/integrations/`): a curated catalog of
+  default MCP servers (filesystem, fetch, browser automation via
+  `@playwright/mcp`, GitHub, Slack, Notion, Gmail, sequential thinking) that
+  the web UI's new **Integrations page** enables/disables live. Enabling
+  writes the server spec to `mcp.json` and re-discovers tools into the running
+  registry — no restart needed. Verified package names against live npm/PyPI
+  registries; community servers carry a badge and per-server env-var hints.
+- **Windows app automation** (`james/tools/office_tools.py`): Outlook inbox
+  read, email send and calendar events; Excel cell read/write (live Excel via
+  COM, openpyxl fallback); Word text extraction (COM, python-docx fallback);
+  PowerPoint deck creation — all through the installed Office via pywin32
+  COM, failing with clear messages off-Windows. New `notify` tool for
+  cross-platform desktop notifications (plyer).
+- **Recipes** (`james/core/recipes.py`, `james/tools/recipes_tools.py`):
+  persisted multi-step automations with `daily HH:MM` / `hourly` /
+  `every N minutes` triggers, run through the gated ToolRegistry (permissions,
+  dry-run, HMAC audit). `compose_recipe` turns natural language ("every
+  morning summarize my emails and notify me") into a saved recipe via the
+  LLM. New Recipes page in the web UI (compose, run now, pause, delete).
+- **Messaging gateway** (`james/gateway/`): Telegram (long-polling Bot API,
+  no extra deps), WhatsApp (Twilio REST + webhook), Discord and Slack
+  (Socket Mode) channels bridged to the same agent core. `james --gateway`
+  runs headless; inbound messages become turns and replies return to the
+  originating chat. `send_message` tool lets the agent push proactively.
+  Optional `GATEWAY_ALLOW_FROM` inbound allowlist.
+- **Cloud plugin registry**: `update_marketplace` / Integrations page sync a
+  GitHub-hosted catalog (`MARKETPLACE_URL`, default
+  `marketplace/plugins.json` in this repo); remote entries merge into the
+  local marketplace and still require Ed25519 signatures to install.
+- New `[gateway]` optional extra (discord.py + slack-sdk) in `pyproject.toml`.
+
+### Added
+- Web UI: Integrations, Recipes and gateway status in the sidebar;
+  `/api/integrations`, `/api/integrations/{name}/enable|disable`,
+  `/api/integrations/reload`, `/api/marketplace`, `/api/marketplace/sync`,
+  `/api/gateway`, `/api/gateway/send`, `/api/gateway/whatsapp` (Twilio
+  webhook), `/api/recipes` CRUD, run and compose endpoints.
+- `ToolRegistry.reload_mcp_tools()` — live MCP re-discovery for the
+  Integrations page.
+
 ## [0.5.0] - 2026-08-11
 
 ### Added

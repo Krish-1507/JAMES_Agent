@@ -212,4 +212,8 @@ def test_model_change_updates_settings_and_publishes() -> None:
         settings.llm.model = original_model
 
     events = runtime.bus.drain(before)[0]
-    assert events[-1]["payload"] == {"type": "model_changed", "provider": "openai", "model": "gpt-4o"}
+    assert events[-1]["payload"] == {
+        "type": "model_changed",
+        "provider": "openai",
+        "model": "gpt-4o",
+    }

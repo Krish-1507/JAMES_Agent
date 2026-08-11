@@ -192,6 +192,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Privacy mode: block ALL non-local network egress (audited).",
     )
     parser.add_argument(
+        "--gateway",
+        action="store_true",
+        help="Headless messaging-gateway mode: bridge Telegram/WhatsApp/Discord/Slack to the agent.",
+    )
+    parser.add_argument(
         "--doctor", action="store_true", help="Run self-diagnostic checks and exit."
     )
     parser.add_argument(
@@ -224,6 +229,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.voice:
         settings.voice.enabled = True
         settings.voice.stt_provider = settings.voice.stt_provider or "whisper_local"
+    if args.gateway:
+        settings.voice.enabled = False
+        settings.voice.stt_provider = "none"
+        settings.gateway.enabled = True
 
     if args.web_dashboard:
         from james.ui.dashboard import start_dashboard
@@ -291,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         or args.web_dashboard
         or args.session
         or args.offline
+        or args.gateway
     )
     if want_desktop and _ui_available():
         return _launch_desktop(port=args.port)
@@ -350,6 +360,34 @@ def main(argv: list[str] | None = None) -> int:
         from .core.guard import install_offline_guard
 
         install_offline_guard()
+
+    if args.gateway:
+        import time
+
+        from .core.recipes import recipe_engine
+        from .core.scheduler import scheduler
+
+        assistant = Assistant(session=args.session)
+        channels = (
+            ", ".join(c.name for c in assistant.gateway.channels) if assistant.gateway else ""
+        )
+        if not channels:
+            print("[!] Gateway mode enabled but no channel is configured.")
+            print("    Add TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, SLACK_APP_TOKEN/SLACK_BOT_TOKEN,")
+            print("    or TWILIO_* keys to your .env and try again.")
+            return 1
+        print(f"[+] Messaging gateway live: {channels}")
+        print("    Send a message from any connected app — replies come back to that chat.")
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            print("\nGateway stopped.")
+            return 0
+        finally:
+            assistant.gateway.stop()
+            recipe_engine.stop()
+            scheduler.stop()
 
     try:
         assistant = Assistant(session=args.session)

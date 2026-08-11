@@ -229,7 +229,11 @@ def test_model_switch_delegates_and_publishes(runtime: ServerRuntime, client: Te
     assert resp.status_code == 200
     assert runtime.assistant.models == [("openai", "gpt-4o")]
     events = runtime.bus.drain(before)[0]
-    assert events[-1]["payload"] == {"type": "model_changed", "provider": "openai", "model": "gpt-4o"}
+    assert events[-1]["payload"] == {
+        "type": "model_changed",
+        "provider": "openai",
+        "model": "gpt-4o",
+    }
 
 
 def test_model_switch_requires_fields(client: TestClient) -> None:
@@ -413,10 +417,14 @@ def test_confirm_allow_once_from_connected_client(
     thread = threading.Thread(target=run_confirm)
     thread.start()
     try:
-        pending = [e for e in runtime.bus.drain(0)[0] if e["payload"]["type"] == "approval_requested"]
+        pending = [
+            e for e in runtime.bus.drain(0)[0] if e["payload"]["type"] == "approval_requested"
+        ]
         deadline = 100
         while not pending and deadline > 0:
-            pending = [e for e in runtime.bus.drain(0)[0] if e["payload"]["type"] == "approval_requested"]
+            pending = [
+                e for e in runtime.bus.drain(0)[0] if e["payload"]["type"] == "approval_requested"
+            ]
             deadline -= 1
         assert pending, "approval request never surfaced"
         req_id = pending[-1]["payload"]["id"]
@@ -440,7 +448,12 @@ def test_onboarding_writes_env_and_applies_live(
 
     def fake_configure(provider, model, api_key="", *, voice_enabled=False, base_url=""):
         written.append(
-            {"provider": provider, "model": model, "api_key": api_key, "voice_enabled": voice_enabled}
+            {
+                "provider": provider,
+                "model": model,
+                "api_key": api_key,
+                "voice_enabled": voice_enabled,
+            }
         )
         return tmp_path / ".env"
 

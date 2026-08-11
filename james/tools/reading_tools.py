@@ -141,9 +141,7 @@ def _open_document(path: Path, max_chars: int) -> ToolResult:
                         cells.append(extractText(cell).strip())
                     if any(cells):
                         lines.append(" | ".join(cells))
-            return ToolResult(
-                ok=True, output="\n".join(lines)[:max_chars] or "(empty spreadsheet)"
-            )
+            return ToolResult(ok=True, output="\n".join(lines)[:max_chars] or "(empty spreadsheet)")
         except Exception as exc:
             return ToolResult(ok=False, output=f"Cannot read .ods file: {exc}")
     if suffix in _TEXT_SUFFIXES:

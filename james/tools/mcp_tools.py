@@ -15,8 +15,8 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
+from ..integrations.manager import mcp_config_path
 from .base import Tool, ToolResult
 
 
@@ -139,7 +139,7 @@ def _spec_from_dict(d: dict) -> MCPServerSpec:
 
 def load_mcp_configs() -> list[MCPServerSpec]:
     configs: list[MCPServerSpec] = []
-    p = Path(__file__).resolve().parents[2] / "mcp.json"
+    p = mcp_config_path()
     if p.exists():
         try:
             data = json.loads(p.read_text(encoding="utf-8"))

@@ -166,6 +166,25 @@ def clipboard(text: str = "") -> ToolResult:
 
 
 @tool(
+    "notify",
+    "Show a system notification (Windows toast, macOS banner, Linux notification).",
+    {
+        "title": {"type": "string", "description": "Notification title."},
+        "message": {"type": "string", "description": "Notification body."},
+    },
+    required=["title", "message"],
+)
+def notify(title: str, message: str) -> ToolResult:
+    try:
+        from plyer import notification
+
+        notification.notify(title=title, message=message, timeout=10)
+        return ToolResult(ok=True, output=f"Notification shown: {title}")
+    except Exception as exc:
+        return ToolResult(ok=False, output=f"Notification failed: {exc}")
+
+
+@tool(
     "upload_image",
     "Encode a local image as a base64 data URI for vision-capable models. Returns the data URI.",
     {

@@ -72,17 +72,41 @@ from .forge_tools import (
     list_skills,
     save_skill,
 )
-from .marketplace import install_plugin, list_plugins, publish_skill, search_plugins
+from .gateway_tools import send_message
+from .marketplace import (
+    install_plugin,
+    list_plugins,
+    publish_skill,
+    search_plugins,
+    update_marketplace,
+)
 from .mcp_tools import discover_mcp_tools
 from .memory_tools import recall, remember
+from .office_tools import (
+    excel_read_cells,
+    excel_write_cells,
+    outlook_create_event,
+    outlook_read_inbox,
+    outlook_send_email,
+    powerpoint_create,
+    word_read_document,
+)
 from .plugin_proxy import discover_plugin_tools
 from .reading_tools import describe_image, extract_audio_text, read_document, read_pdf
+from .recipes_tools import (
+    compose_recipe,
+    create_recipe,
+    delete_recipe,
+    list_recipes,
+    run_recipe_now,
+)
 from .research_tools import learn_skill, research
 from .scheduler_tools import cancel_task, list_scheduled, schedule_task
 from .system_tools import (
     clipboard,
     control_media,
     get_system_info,
+    notify,
     open_application,
     run_shell_command,
     take_screenshot,
@@ -151,6 +175,7 @@ ALL_TOOLS: list[Tool] = [
     get_system_info,
     control_media,
     clipboard,
+    notify,
     computer_use,
     click_at,
     type_text,
@@ -170,12 +195,26 @@ ALL_TOOLS: list[Tool] = [
     manage_files,
     list_file_manager_tasks,
     stop_file_manager,
+    outlook_read_inbox,
+    outlook_send_email,
+    outlook_create_event,
+    excel_read_cells,
+    excel_write_cells,
+    word_read_document,
+    powerpoint_create,
+    create_recipe,
+    compose_recipe,
+    list_recipes,
+    delete_recipe,
+    run_recipe_now,
+    send_message,
     help_command,
     task_dependency_graph,
     list_plugins,
     search_plugins,
     install_plugin,
     publish_skill,
+    update_marketplace,
 ]
 
 # Tools that mutate the system and should ask for confirmation when enabled.
@@ -194,6 +233,16 @@ DANGEROUS_TOOLS = {
     "forget_skill",
     "install_plugin",
     "publish_skill",
+    "outlook_send_email",
+    "outlook_create_event",
+    "excel_write_cells",
+    "powerpoint_create",
+    "create_recipe",
+    "compose_recipe",
+    "delete_recipe",
+    "run_recipe_now",
+    "send_message",
+    "update_marketplace",
 }
 
 
@@ -265,6 +314,24 @@ class ToolRegistry:
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
+
+    def reload_mcp_tools(self) -> dict:
+        """Re-discover MCP servers and swap the registry's mcp_* tools in place.
+
+        Used by the Integrations page so enabling/disabling a server takes
+        effect without restarting JAMES. Returns {"removed": n, "added": n}.
+        """
+        removed = [n for n in self._tools if n.startswith("mcp_")]
+        for name in removed:
+            del self._tools[name]
+        added = 0
+        try:
+            for t in discover_mcp_tools():
+                self._tools[t.name] = t
+                added += 1
+        except Exception as exc:  # discovery must never crash the caller
+            print(f"[plugins] MCP re-discovery failed: {exc}")
+        return {"removed": len(removed), "added": added}
 
     def schemas(self) -> list[dict]:
         return [t.schema() for t in self._tools.values()]

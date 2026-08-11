@@ -81,6 +81,28 @@ buttons and a text input, so typed text and voice share one conversation.
   `DuplexController`, the Gemini Live / OpenAI Realtime / local streaming
   session engines, `LocalStreamingSTT`, and barge-in-capable `StreamTTS` (see
   the full-duplex voice section above).
+- **`james.integrations`** — the one-click MCP catalog (`catalog.py`) and the
+  `mcp.json` manager (`manager.py`). Enabling an integration appends its
+  server spec to `mcp.json`; `ToolRegistry.reload_mcp_tools()` re-discovers
+  MCP tools into the running registry without a restart.
+- **`james.gateway`** — the messaging gateway: `GatewayManager` owns the
+  channel set and routes messages. `TelegramChannel` long-polls the Bot API
+  (no extra dependencies); `WhatsAppChannel` sends via the Twilio REST API
+  and receives inbound webhooks at `POST /api/gateway/whatsapp`; Discord and
+  Slack (Socket Mode) channels are optional (`[gateway]` extra). Inbound
+  messages run as assistant turns in dedicated threads and `reply` events are
+  delivered back to the originating channel; the `send_message` tool lets the
+  agent push messages proactively. `james --gateway` runs the bridge headless.
+- **`james.core.recipes`** — the recipe engine: persists named multi-step
+  automations (triggers `daily HH:MM` / `hourly` / `every N minutes` / ISO) to
+  `workspace/recipes.json` and fires due recipes on a background thread.
+  Every step executes through `ToolRegistry.execute`, so permissions, mode
+  tiers, dry-run and HMAC audit apply to automations exactly as they do to
+  interactive calls.
+- **`james.tools.office_tools`** — Windows app automation via pywin32 COM
+  (Outlook email/calendar, live Excel, Word, PowerPoint) with
+  openpyxl/python-docx fallbacks so the file-based paths work on every
+  platform.
 - **`james.config`** — validated settings loaded from `.env`.
 - **`james.sdk`** — the stable plugin authoring surface (see
   [plugins.md](plugins.md)).

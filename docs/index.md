@@ -28,6 +28,26 @@ The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contai
 
 JAMES currently supports LLM tool calling, local files and documents, configured MCP servers, browser and desktop automation, turn-based and full-duplex voice (Gemini Live / OpenAI Realtime / fully local streaming), memory, encrypted history, optional offline operation, a constrained Skill Forge, and a documented plugin SDK (`james.sdk`). The agent loop plans before acting, retries transient tool errors, runs independent tool calls in parallel, and compacts long contexts; web tools offer multi-engine search, main-content extraction, and JS-page rendering.
 
+Phase-4 automation and scale work adds:
+
+- **One-click MCP integrations** — a curated catalog of default MCP servers
+  (filesystem, fetch, browser automation, GitHub, Slack, Notion, Gmail,
+  sequential thinking) toggled from the web UI, writing `mcp.json` and
+  hot-reloading tools into the running registry.
+- **Windows app automation** — drive the real Microsoft Office applications
+  via COM (Outlook email/calendar, Excel cells, Word text, PowerPoint decks)
+  with openpyxl/python-docx fallbacks on other platforms, plus desktop
+  notifications.
+- **Recipes** — persisted multi-step automations (`daily 09:00`, `hourly`,
+  `every N minutes`) run through the gated tool registry, composed by the LLM
+  from plain language ("every morning summarize my emails and notify me").
+- **Messaging gateway** — Telegram, WhatsApp (Twilio), Discord and Slack
+  bridged to the same agent core (`james --gateway`); inbound messages become
+  turns and replies return to the originating chat, with a `send_message`
+  tool for proactive pushes.
+- **Cloud plugin registry** — the marketplace syncs a GitHub-hosted catalog
+  (`MARKETPLACE_URL`); remote plugins still require Ed25519 signatures.
+
 ### Promotion readiness
 
 JAMES is **alpha**. The current hardening baseline includes explicit desktop approvals, workspace-scoped paths, spawned-process workers for high-risk tools and plugins, signed plugin metadata, recoverable deletion, SCA/SAST, and OIDC-signed release artifacts. Remaining promotion work is tracked in the [README roadmap](https://github.com/Krish-1507/JAMES_Agent#roadmap-to-v1).
@@ -40,7 +60,12 @@ JAMES is **alpha**. The current hardening baseline includes explicit desktop app
   system-tray support hosts — or falls back to the default browser for — a
   dependency-free single-page app: streaming chat, live tool activity, model
   switcher, sessions sidebar, voice controls, settings/tools pages,
-  deny-by-default approval prompts, and an onboarding wizard.
+  deny-by-default approval prompts, and an onboarding wizard. Phase-4 adds
+  **Integrations** (one-click MCP servers + cloud registry sync + gateway
+  status), **Recipes** (compose, run now, pause, delete), and gateway send.
+- **Messaging gateway** (`james --gateway`): run the agent headless and
+  bridge Telegram, WhatsApp (Twilio webhook on `/api/gateway/whatsapp`),
+  Discord and Slack. Messages become turns; replies go back to the same chat.
 - **Voice** (`james --voice`): turn-based speech-to-speech by default, or
   full-duplex (`DUPLEX_MODE=gemini_live|openai_realtime|local|auto`) with
   wake-gated sessions, interruption, and barge-in. See the README

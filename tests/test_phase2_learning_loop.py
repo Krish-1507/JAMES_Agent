@@ -74,7 +74,9 @@ def test_think_injects_skill_hint(isolated_workspace: Path, saved_skill: Path) -
     a.agent.llm = _NoopProvider()
     a.agent._nudge = False
     calls: list = []
-    a.agent.run = lambda prompt, history=None, images=None: calls.append(prompt) or ("hi", history or [])
+    a.agent.run = lambda prompt, history=None, images=None: (
+        calls.append(prompt) or ("hi", history or [])
+    )
     a.think("double the number 21")
     assert any("double_number" in c for c in calls)
 

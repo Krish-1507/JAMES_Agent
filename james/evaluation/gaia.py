@@ -41,10 +41,10 @@ GAIA_SYSTEM_PROMPT = (
     "that matches the question's expected answer exactly. Do not include "
     "explanations, units (unless the question names them), quotes, or "
     "punctuation not part of the answer. If the question states units (e.g. "
-    "\"thousands\", \"%\", \"km\"), give the answer IN those units: for "
-    "\"17 thousand\" answer 17, not 17000. The FINAL LINE of your final "
+    '"thousands", "%", "km"), give the answer IN those units: for '
+    '"17 thousand" answer 17, not 17000. The FINAL LINE of your final '
     "message must be the bare answer and nothing else — never lead that line "
-    "with words like \"The answer is\", never wrap it in quotes, backticks, "
+    'with words like "The answer is", never wrap it in quotes, backticks, '
     "markdown, or bold, and never put any text after it — so a grader can "
     "read the answer directly off the last line. Never emit inline "
     "tool-calling markup such as <|DSML|> or <search> in your reply, and "
@@ -373,8 +373,8 @@ def _run_task_subprocess(
     except subprocess.TimeoutExpired as exc:
         raw = exc.stderr or b""
         tail = (
-            raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
-        ).strip().splitlines()
+            (raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw).strip().splitlines()
+        )
         detail = tail[-1] if tail else "no stderr"
         return "", {
             "tool_calls": 0,

@@ -64,17 +64,17 @@ def run_ui(port: int = 8124) -> int:
 
     menu = QMenu()
     show_action = menu.addAction("Show JAMES")
-    show_action.triggered.connect(
-        lambda: (view.show(), view.raise_(), view.activateWindow())
-    )
+    show_action.triggered.connect(lambda: (view.show(), view.raise_(), view.activateWindow()))
     menu.addSeparator()
     quit_action = menu.addAction("Quit")
     quit_action.triggered.connect(app.quit)
     tray.setContextMenu(menu)
     tray.activated.connect(
-        lambda reason: (view.show(), view.raise_(), view.activateWindow())
-        if reason == QSystemTrayIcon.Trigger
-        else None
+        lambda reason: (
+            (view.show(), view.raise_(), view.activateWindow())
+            if reason == QSystemTrayIcon.Trigger
+            else None
+        )
     )
     tray.show()
 
@@ -83,9 +83,7 @@ def run_ui(port: int = 8124) -> int:
         while time.time() < deadline and "runtime" not in holder and "error" not in holder:
             time.sleep(0.1)
         if holder.get("error"):
-            QMessageBox.critical(
-                view, "JAMES", "Failed to start the JAMES server — see the logs."
-            )
+            QMessageBox.critical(view, "JAMES", "Failed to start the JAMES server — see the logs.")
             app.quit()
 
     threading.Thread(target=_error_watch, daemon=True).start()
@@ -95,7 +93,9 @@ def run_ui(port: int = 8124) -> int:
             event.ignore()
             view.hide()
             tray.showMessage(
-                "JAMES", "Still running in the system tray.", QSystemTrayIcon.Information,
+                "JAMES",
+                "Still running in the system tray.",
+                QSystemTrayIcon.Information,
                 TRAY_BALLOON_MS,
             )
         else:

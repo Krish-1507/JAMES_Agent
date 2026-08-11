@@ -20,6 +20,8 @@
       <button class="nav-btn active" data-page="chat">💬 Chat</button>
       <button class="nav-btn" data-page="voice">🎙 Voice</button>
       <button class="nav-btn" data-page="tools">🧰 Tools</button>
+      <button class="nav-btn" data-page="integrations">🔌 Integrations</button>
+      <button class="nav-btn" data-page="recipes">🧩 Recipes</button>
       <button class="nav-btn" data-page="settings">⚙️ Settings</button>
     </nav>
   </aside>
@@ -76,6 +78,54 @@
         <p class="hint">Tools outside the allowlist are denied. Dangerous tools require your confirmation before they run.</p>
         <div id="tools-list" class="tools-list"></div>
         <button id="tools-save-btn" class="btn primary">Save tool permissions</button>
+      </div>
+    </section>
+
+    <section id="page-integrations" class="page">
+      <div class="card">
+        <h2>Integrations</h2>
+        <p class="hint">One-click MCP servers — enable one and its tools appear in the registry immediately. Servers need <code>npx</code> (Node.js) and the <code>mcp</code> extra: <code>pip install "james-assistant[mcp]"</code>.</p>
+        <div id="integration-list" class="tools-list"></div>
+      </div>
+      <div class="card">
+        <h2>Cloud plugin marketplace</h2>
+        <p class="hint">JAMES syncs the plugin catalog from a GitHub-hosted registry. Remote plugins still require a valid signature before they can be installed.</p>
+        <div id="marketplace-info" class="muted"></div>
+        <div class="btn-row">
+          <button id="marketplace-sync-btn" class="btn primary">Sync from cloud</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Messaging gateway</h2>
+        <p class="hint">Bridge Telegram, WhatsApp, Discord and Slack to JAMES. Configure tokens in <code>.env</code> (TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, SLACK_APP_TOKEN/SLACK_BOT_TOKEN, TWILIO_*) and set <code>GATEWAY_ENABLED=true</code>.</p>
+        <div id="gateway-info" class="tools-list"></div>
+      </div>
+    </section>
+
+    <section id="page-recipes" class="page">
+      <div class="card">
+        <h2>Recipes</h2>
+        <p class="hint">Named multi-step automations. Compose one in plain language ("every morning summarize my emails and notify me") and JAMES turns it into tool steps.</p>
+        <div id="recipe-list" class="tools-list"></div>
+      </div>
+      <div class="card">
+        <h2>New recipe</h2>
+        <form id="recipe-form">
+          <label>Name <input type="text" id="rc-name" placeholder="morning-email-digest"></label>
+          <label>Trigger <select id="rc-trigger">
+            <option value="daily 09:00">daily 09:00</option>
+            <option value="daily 08:00">daily 08:00</option>
+            <option value="hourly">hourly</option>
+            <option value="every 30 minutes">every 30 minutes</option>
+            <option value="every 60 minutes">every 60 minutes</option>
+            <option value="">manual only</option>
+          </select></label>
+          <label>What should it do? <input type="text" id="rc-request" placeholder="e.g. every morning summarize my emails and notify me"></label>
+          <label>Steps (JSON, optional — leave empty to auto-compose) <textarea id="rc-steps" rows="4" style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:12px;"></textarea></label>
+          <div class="btn-row">
+            <button type="submit" class="btn primary">Compose &amp; save</button>
+          </div>
+        </form>
       </div>
     </section>
 

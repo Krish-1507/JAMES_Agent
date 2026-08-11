@@ -211,7 +211,9 @@ class ServerRuntime:
             assistant._text_queue = queue.Queue()
         with suppress(Exception):
             assistant.set_confirmation_handler(self._confirm)
-        self._thread = threading.Thread(target=self._run_loop, name="james-server-assistant", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run_loop, name="james-server-assistant", daemon=True
+        )
         self._thread.start()
 
     def _run_loop(self) -> None:
@@ -325,6 +327,19 @@ class ServerRuntime:
         self._assistant.switch_session(name)
         self.bus.publish({"type": "session_changed", "name": self._assistant.current_session()})
         return True
+
+    def reload_integrations(self) -> dict:
+        """Re-discover MCP servers so enabled/disabled integrations apply live."""
+        assistant = self._assistant
+        if assistant is None or not hasattr(assistant, "registry"):
+            return {"removed": 0, "added": 0}
+        try:
+            counts = assistant.registry.reload_mcp_tools()
+        except Exception as exc:
+            log.warning("integration reload failed: %s", exc)
+            counts = {"removed": 0, "added": 0}
+        self.bus.publish({"type": "integrations_reloaded", **counts})
+        return counts
 
 
 def sys_stdout_stderr() -> tuple[Any, Any]:
@@ -561,6 +576,215 @@ def create_app(runtime: ServerRuntime) -> FastAPI:
             raise HTTPException(status_code=404, detail="unknown request id")
         return {"ok": True}
 
+    # ------------------------------------------------------------------
+    # Phase-4: integrations (one-click MCP servers)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/integrations")
+    def integrations_status():
+        from ..integrations.manager import IntegrationManager
+
+        try:
+            rows = IntegrationManager().status()
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return {"integrations": rows}
+
+    @app.post("/api/integrations/{name}/enable")
+    def integrations_enable(name: str):
+        from ..integrations.manager import IntegrationManager
+
+        ok, message = IntegrationManager().enable(name)
+        if not ok:
+            raise HTTPException(
+                status_code=404 if "Unknown" in message or "already" in message else 400,
+                detail=message,
+            )
+        counts = runtime.reload_integrations()
+        return {"ok": True, "message": message, "reloaded": counts}
+
+    @app.post("/api/integrations/{name}/disable")
+    def integrations_disable(name: str):
+        from ..integrations.manager import IntegrationManager
+
+        ok, message = IntegrationManager().disable(name)
+        if not ok:
+            raise HTTPException(status_code=400, detail=message)
+        counts = runtime.reload_integrations()
+        return {"ok": True, "message": message, "reloaded": counts}
+
+    @app.post("/api/integrations/reload")
+    def integrations_reload():
+        return {"ok": True, "reloaded": runtime.reload_integrations()}
+
+    # ------------------------------------------------------------------
+    # Phase-4: cloud plugin registry (GitHub-hosted marketplace)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/marketplace")
+    def marketplace_status_endpoint():
+        from ..tools.marketplace import marketplace_status
+
+        return marketplace_status()
+
+    @app.post("/api/marketplace/sync")
+    def marketplace_sync():
+        from ..tools.marketplace import sync_remote_catalog
+
+        result = sync_remote_catalog()
+        if not result["ok"]:
+            raise HTTPException(status_code=502, detail=result["error"])
+        return {"ok": True, **result}
+
+    # ------------------------------------------------------------------
+    # Phase-4: messaging gateway
+    # ------------------------------------------------------------------
+
+    @app.get("/api/gateway")
+    def gateway_status():
+        a = runtime.assistant
+        if a is None:
+            return {"enabled": False, "channels": []}
+        gateway = getattr(a, "gateway", None)
+        if gateway is None:
+            return {"enabled": False, "channels": []}
+        return {"enabled": True, "channels": gateway.status()}
+
+    @app.post("/api/gateway/send")
+    async def gateway_send(request: Request):
+        body = await request.json()
+        a = runtime.assistant
+        gateway = getattr(a, "gateway", None)
+        if gateway is None:
+            raise HTTPException(status_code=503, detail="gateway is not running")
+        channel = (body.get("channel") or "").strip()
+        text = (body.get("text") or "").strip()
+        if not channel or not text:
+            raise HTTPException(status_code=400, detail="channel and text required")
+        if not gateway.send(channel, text, chat_id=str(body.get("chat_id") or "")):
+            raise HTTPException(status_code=400, detail=f"could not send to '{channel}'")
+        return {"ok": True}
+
+    @app.post("/api/gateway/whatsapp")
+    async def gateway_whatsapp_webhook(request: Request):
+        """Twilio WhatsApp webhook: form-encoded inbound message."""
+        form = await request.form()
+        a = runtime.assistant
+        gateway = getattr(a, "gateway", None)
+        if gateway is None:
+            raise HTTPException(status_code=503, detail="gateway is not running")
+        whatsapp = next((c for c in gateway.channels if c.name == "whatsapp"), None)
+        if whatsapp is None:
+            raise HTTPException(status_code=503, detail="whatsapp channel is not connected")
+        whatsapp.handle_webhook({k: str(v) for k, v in form.items()})
+        return {"ok": True}
+
+    # ------------------------------------------------------------------
+    # Phase-4: recipes (persisted automations)
+    # ------------------------------------------------------------------
+
+    def _recipe_payload(recipe) -> dict:
+        return {
+            "name": recipe.name,
+            "description": recipe.description,
+            "trigger": recipe.trigger,
+            "enabled": recipe.enabled,
+            "stop_on_error": recipe.stop_on_error,
+            "steps": [{"tool": s.tool, "args": s.args} for s in recipe.steps],
+            "created": recipe.created,
+            "last_run": recipe.last_run,
+            "last_error": recipe.last_error,
+            "runs": recipe.runs,
+        }
+
+    def _recipes_api():
+        a = runtime.assistant
+        engine = getattr(a, "recipe_engine", None)
+        if engine is None:
+            raise HTTPException(status_code=503, detail="recipe engine is not running")
+        return engine
+
+    @app.get("/api/recipes")
+    def recipes_list():
+        engine = _recipes_api()
+        return {"recipes": [_recipe_payload(r) for r in engine.list()]}
+
+    @app.post("/api/recipes")
+    async def recipes_create(request: Request):
+        from ..core.recipes import Recipe, steps_from_json
+
+        body = await request.json()
+        engine = _recipes_api()
+        name = (body.get("name") or "").strip()
+        steps_json = body.get("steps_json") or body.get("steps")
+        if not name or not steps_json:
+            raise HTTPException(status_code=400, detail="name and steps_json are required")
+        try:
+            steps = steps_from_json(
+                json.dumps(steps_json) if not isinstance(steps_json, str) else steps_json
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        recipe = Recipe(
+            name=name.lower().replace(" ", "-"),
+            description=(body.get("description") or "").strip(),
+            trigger=(body.get("trigger") or "").strip() or None,
+            steps=steps,
+            stop_on_error=bool(body.get("stop_on_error", True)),
+        )
+        ok, message = engine.add(recipe)
+        if not ok:
+            raise HTTPException(status_code=400, detail=message)
+        return {"ok": True, "message": message, "recipe": _recipe_payload(recipe)}
+
+    @app.post("/api/recipes/compose")
+    async def recipes_compose(request: Request):
+        from ..tools.recipes_tools import compose_recipe as compose_recipe_tool
+
+        body = await request.json()
+        request_text = (body.get("request") or body.get("description") or "").strip()
+        if not request_text:
+            raise HTTPException(status_code=400, detail="request is required")
+        engine = _recipes_api()
+        if engine is None:  # pragma: no cover - _recipes_api already raised
+            raise HTTPException(status_code=503, detail="recipe engine is not running")
+        result = compose_recipe_tool.run(
+            request=request_text, trigger=(body.get("trigger") or "").strip()
+        )
+        if not result.ok:
+            raise HTTPException(
+                status_code=400
+                if "unsupported trigger" in result.output or "unknown tool" in result.output
+                else 502,
+                detail=result.output,
+            )
+        return {
+            "ok": True,
+            "message": result.output,
+            "recipes": [_recipe_payload(r) for r in engine.list()],
+        }
+
+    @app.post("/api/recipes/{name}/run")
+    def recipes_run(name: str):
+        engine = _recipes_api()
+        ok, output = engine.run_now(name)
+        return {"ok": ok, "output": output}
+
+    @app.post("/api/recipes/{name}/toggle")
+    async def recipes_toggle(name: str, request: Request):
+        body = await request.json()
+        engine = _recipes_api()
+        if not engine.set_enabled(name, bool(body.get("enabled"))):
+            raise HTTPException(status_code=404, detail=f"Recipe '{name}' not found.")
+        return {"ok": True}
+
+    @app.delete("/api/recipes/{name}")
+    def recipes_delete(name: str):
+        engine = _recipes_api()
+        if not engine.remove(name):
+            raise HTTPException(status_code=404, detail=f"Recipe '{name}' not found.")
+        return {"ok": True}
+
     @app.get("/api/onboarding")
     async def onboarding_get():
         from ..config import settings
@@ -611,7 +835,13 @@ def _serve_asset(name: str):
     from fastapi.responses import Response
 
     data = _load_web_asset(name)
-    ctype = "text/html" if name.endswith(".html") else "text/css" if name.endswith(".css") else "text/javascript"
+    ctype = (
+        "text/html"
+        if name.endswith(".html")
+        else "text/css"
+        if name.endswith(".css")
+        else "text/javascript"
+    )
     return Response(content=data, media_type=ctype)
 
 
@@ -648,7 +878,9 @@ def _apply_settings(updates: dict, settings: Any) -> list[str]:
                 a.mode = value
         elif key in ("dry_run", "confirm_dangerous_actions", "offline_mode", "voice_enabled"):
             a.dry_run = bool(value) if key == "dry_run" else a.dry_run
-            a.confirm_dangerous_actions = bool(value) if key == "confirm_dangerous_actions" else a.confirm_dangerous_actions
+            a.confirm_dangerous_actions = (
+                bool(value) if key == "confirm_dangerous_actions" else a.confirm_dangerous_actions
+            )
             a.offline_mode = bool(value) if key == "offline_mode" else a.offline_mode
             v.enabled = bool(value) if key == "voice_enabled" else v.enabled
         elif key == "wake_engine":
@@ -667,7 +899,9 @@ def _apply_settings(updates: dict, settings: Any) -> list[str]:
         elif key in ("allowed_tools", "denied_tools"):
             if isinstance(value, list):
                 a.allowed_tools = [str(t) for t in value]
-                a.denied_tools = [str(t) for t in value] if key == "denied_tools" else a.denied_tools
+                a.denied_tools = (
+                    [str(t) for t in value] if key == "denied_tools" else a.denied_tools
+                )
             else:
                 errors.append(f"{key} must be a list")
         else:

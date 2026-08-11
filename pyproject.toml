@@ -55,6 +55,10 @@ docs = [
 ]
 # Browser automation (Playwright)
 browser = ["playwright>=1.43.0"]
+# Messaging gateway (Telegram + WhatsApp work with no extra deps; Discord/Slack need these)
+gateway = ["discord.py>=2.3.0", "slack-sdk>=3.28.0"]
+# Windows Office COM automation (Windows + Microsoft Office only)
+office = ["pywin32>=306; platform_system == 'Windows'"]
 # Desktop control (computer-use)
 desktop = ["pyautogui>=0.9.54", "Pillow>=10.0.0", "pyperclip>=1.8.2", "psutil>=5.9.8", "plyer>=2.1.0"]
 # Voice (STT + TTS)
@@ -90,6 +94,9 @@ all = [
     "odfpy>=1.4.0",
     "pyarrow>=14.0.0",
     "playwright>=1.43.0",
+    "discord.py>=2.3.0",
+    "slack-sdk>=3.28.0",
+    "pywin32>=306; platform_system == 'Windows'",
     "pyautogui>=0.9.54",
     "Pillow>=10.0.0",
     "pyperclip>=1.8.2",

@@ -59,7 +59,9 @@ class TestProviderPresets:
     def test_custom_uses_configured_base_url(self) -> None:
         provider_instance = build_provider(
             LLMSettings(
-                provider="custom", model="llama3", custom_base_url="http://127.0.0.1:11434/v1",
+                provider="custom",
+                model="llama3",
+                custom_base_url="http://127.0.0.1:11434/v1",
                 failover=[],
             )
         )

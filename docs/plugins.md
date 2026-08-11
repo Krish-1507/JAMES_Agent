@@ -148,3 +148,37 @@ full dependency chain and rejects missing dependencies, cycles, unsigned code,
 unknown keys, digest mismatches, and invalid signatures. Locally published
 skills are signed automatically with a workspace-local key whose public half is
 enrolled in the same trust directory.
+
+## Cloud plugin registry
+
+Since Phase-4, the marketplace can also sync a **remote catalog** published as
+a plain JSON list on GitHub (or any static host). JAMES merges it into the
+local `marketplace.json` on demand; remote entries replace local ones with the
+same name and are marked `"source": "remote"`.
+
+```dotenv
+MARKETPLACE_URL=https://raw.githubusercontent.com/Krish-1507/JAMES_Agent/main/marketplace/plugins.json
+```
+
+Trigger a sync from the agent (`update_marketplace`), the Integrations page in
+the web UI, or in code:
+
+```python
+from james.tools.marketplace import sync_remote_catalog, marketplace_status
+
+result = sync_remote_catalog()          # {"ok": True, "added": n, "total": n}
+status = marketplace_status()           # last sync time + local/remote counts
+```
+
+Entry shape:
+
+```json
+{"name": "my-plugin", "description": "What it does.", "version": "1.0.0"}
+```
+
+**Security is unchanged**: the catalog is a discovery index only. Installing a
+plugin from it still runs the full Ed25519 signature and digest verification
+described above, so code fetched from the cloud cannot execute unless it was
+signed by a key you have installed in `trusted_plugin_keys/`. `sync_remote_catalog`
+also ignores malformed entries and never touches the local catalog on a
+network failure.

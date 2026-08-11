@@ -44,6 +44,28 @@ Plugin manifests support dependency declarations, SHA-256 content digests, key I
 
 Ordinary Python files in `./plugins/` remain disabled unless `ENABLE_TRUSTED_EXTERNAL_PLUGINS=true`; when enabled they must be signed by a trusted key. Plugin decorators are inspected without importing code in the desktop process, and tool execution is delegated to a spawned worker.
 
+## Phase-4 surfaces: recipes, gateway, integrations
+
+- **Recipes** are persisted multi-step automations executed step by step
+  through `ToolRegistry.execute` — the same gate as interactive calls. Mode
+  tiers, `ALLOWED_TOOLS`, dry-run, approvals and HMAC audit apply to
+  scheduled steps exactly as they do to live turns, so a recipe cannot reach
+  more capability than the agent itself has.
+- **Messaging gateway** (Telegram / WhatsApp / Discord / Slack) runs inbound
+  messages as ordinary turns. `GATEWAY_ALLOW_FROM` restricts inbound to a
+  comma-separated allowlist of sender or chat ids (empty = accept all), which
+  is the recommended way to expose the agent to the internet. Tokens live
+  only in `.env`; the Twilio webhook endpoint is inert unless a WhatsApp
+  channel is connected.
+- **Cloud plugin registry** (`MARKETPLACE_URL`) is a discovery index only.
+  Sync merges catalog metadata into `marketplace.json`; installing any remote
+  plugin still requires a valid Ed25519 signature from a trusted key, so
+  syncing a hostile catalog cannot execute code.
+- **MCP integrations** enable community servers one-click; the servers'
+  tools still flow through the registry gate. Treat MCP servers as
+  semi-trusted third-party code — review what a newly enabled server exposes
+  before use.
+
 ## Secrets, history, and audit logs
 
 - Audit records are signed with an HMAC key generated per workspace. Set `JAMES_AUDIT_HMAC_KEY` to supply a managed key.

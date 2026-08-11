@@ -1,0 +1,37 @@
+[
+  {
+    "name": "file-organizer",
+    "description": "Automatically organizes files by type, date, and project.",
+    "author": "JAMES Community",
+    "version": "1.0.0",
+    "tags": ["files", "organization", "automation"]
+  },
+  {
+    "name": "web-scraper",
+    "description": "Scrape web pages and extract structured data.",
+    "author": "JAMES Community",
+    "version": "1.0.0",
+    "tags": ["web", "scraping", "data"]
+  },
+  {
+    "name": "email-sender",
+    "description": "Send emails via SMTP with templates and attachments.",
+    "author": "JAMES Community",
+    "version": "1.0.0",
+    "tags": ["email", "communication"]
+  },
+  {
+    "name": "calendar-sync",
+    "description": "Sync with Google Calendar or Outlook for scheduling.",
+    "author": "JAMES Community",
+    "version": "1.0.0",
+    "tags": ["calendar", "scheduling", "productivity"]
+  },
+  {
+    "name": "note-taker",
+    "description": "Create and manage structured notes with tags and search.",
+    "author": "JAMES Community",
+    "version": "1.0.0",
+    "tags": ["notes", "productivity", "organization"]
+  }
+]

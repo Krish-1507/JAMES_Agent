@@ -41,8 +41,14 @@ ENABLE_TRUSTED_EXTERNAL_PLUGINS=false
 
 ```bash
 python -m compileall -q james
+python -m ruff check james tests
+python -m ruff format --check james tests
 python -m pytest -q
 ```
+
+Test suites are organized by phase: `tests/test_phase0_regressions.py` through
+`tests/test_phase5_server_ui.py`; Phase-4 (integrations, recipes, gateway,
+Office tools, cloud plugin registry) lives in `tests/test_phase4_*.py`.
 
 Also update the README, `.env.example`, and `docs/` whenever a user-facing behavior, security boundary, or configuration setting changes.
 

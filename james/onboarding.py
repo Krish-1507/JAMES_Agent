@@ -149,9 +149,7 @@ def run_onboarding(force: bool = False) -> Path:
 
     voice = _ask("Enable voice mode? (y/n)", "n").lower() in ("y", "yes", "1", "true")
 
-    env_path = write_env(
-        provider, model, api_key, voice_enabled=voice, base_url=base_url
-    )
+    env_path = write_env(provider, model, api_key, voice_enabled=voice, base_url=base_url)
 
     print("\n" + "=" * 60)
     print(f"  [OK] Created {env_path}")

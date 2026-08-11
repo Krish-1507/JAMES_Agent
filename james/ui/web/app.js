@@ -332,6 +332,10 @@ async function loadStatus() {
   loadTools();
   loadSettings();
   loadOnboarding();
+  loadIntegrations();
+  loadMarketplace();
+  loadGateway();
+  loadRecipes();
   $("#conn-dot").classList.add("on");
 }
 
@@ -626,6 +630,171 @@ $("#settings-form").addEventListener("submit", async (e) => {
   try {
     await api("/api/settings", "POST", updates);
     toast("Settings saved (applies to the next turn)", "ok");
+  } catch (err) { toast(err.message, "err"); }
+});
+
+// ---------------------------------------------------------------------------
+// integrations page (one-click MCP servers)
+// ---------------------------------------------------------------------------
+
+async function loadIntegrations() {
+  try {
+    const r = await api("/api/integrations");
+    renderIntegrations(r.integrations || []);
+  } catch (e) { toast("Integrations: " + e.message, "err"); }
+}
+
+function renderIntegrations(rows) {
+  const list = $("#integration-list");
+  list.innerHTML = "";
+  for (const it of rows) {
+    const missingEnv = Object.entries(it.env || {}).filter(([, v]) => !v.set);
+    const item = document.createElement("div");
+    item.className = "tool-item";
+    item.innerHTML = `
+      <label class="check"><input type="checkbox" data-name="${escapeHtml(it.name)}" ${it.enabled ? "checked" : ""}></label>
+      <div style="flex:1">
+        <div class="t-name">${escapeHtml(it.title || it.name)} ${it.community ? '<span class="badge">community</span>' : ""}</div>
+        <div class="t-desc">${escapeHtml(it.description || "")}</div>
+        <div class="t-desc muted small">${escapeHtml(it.command || "")} ${escapeHtml((it.args || []).join(" "))}</div>
+        ${missingEnv.length ? `<div class="t-desc" style="color:var(--warn)">needs: ${escapeHtml(missingEnv.map(([k]) => k).join(", "))}</div>` : ""}
+      </div>`;
+    item.querySelector("input").addEventListener("change", async (ev) => {
+      const enabled = ev.target.checked;
+      try {
+        const r = await api(`/api/integrations/${encodeURIComponent(it.name)}/${enabled ? "enable" : "disable"}`, "POST", {});
+        toast(`${enabled ? "Enabled" : "Disabled"} ${it.name}${r.reloaded ? ` (tools: -${r.reloaded.removed} +${r.reloaded.added})` : ""}`, "ok");
+      } catch (e2) { toast(e2.message, "err"); ev.target.checked = !enabled; }
+    });
+    list.appendChild(item);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// cloud marketplace
+// ---------------------------------------------------------------------------
+
+async function loadMarketplace() {
+  try {
+    const m = await api("/api/marketplace");
+    const synced = m.synced_at ? `Last sync: ${m.synced_at}` : "Never synced";
+    $("#marketplace-info").textContent =
+      `${m.url} — ${synced} — ${m.remote_count} remote / ${m.local_count} total`;
+  } catch (e) { $("#marketplace-info").textContent = "Marketplace status unavailable."; }
+}
+
+$("#marketplace-sync-btn").addEventListener("click", async () => {
+  $("#marketplace-sync-btn").disabled = true;
+  try {
+    const r = await api("/api/marketplace/sync", "POST", {});
+    toast(r.message, "ok");
+    loadMarketplace();
+  } catch (e) { toast(e.message, "err"); }
+  $("#marketplace-sync-btn").disabled = false;
+});
+
+// ---------------------------------------------------------------------------
+// messaging gateway
+// ---------------------------------------------------------------------------
+
+async function loadGateway() {
+  try {
+    const g = await api("/api/gateway");
+    const list = $("#gateway-info");
+    list.innerHTML = "";
+    if (!g.enabled) {
+      list.innerHTML = '<div class="t-desc muted">Gateway is disabled. Set GATEWAY_ENABLED=true in .env and restart.</div>';
+      return;
+    }
+    for (const c of g.channels || []) {
+      const item = document.createElement("div");
+      item.className = "tool-item";
+      item.innerHTML = `<div><div class="t-name">${escapeHtml(c.name)} <span class="badge" style="border-color:var(--ok);color:var(--ok)">${c.running ? "connected" : "stopped"}</span></div></div>`;
+      list.appendChild(item);
+    }
+  } catch (e) { /* gateway card optional */ }
+}
+
+// ---------------------------------------------------------------------------
+// recipes page
+// ---------------------------------------------------------------------------
+
+async function loadRecipes() {
+  try {
+    const r = await api("/api/recipes");
+    renderRecipes(r.recipes || []);
+  } catch (e) { toast("Recipes: " + e.message, "err"); }
+}
+
+function renderRecipes(recipes) {
+  const list = $("#recipe-list");
+  list.innerHTML = "";
+  if (!recipes.length) {
+    list.innerHTML = '<div class="t-desc muted">No recipes yet — compose one below.</div>';
+    return;
+  }
+  for (const rc of recipes) {
+    const item = document.createElement("div");
+    item.className = "tool-item";
+    const steps = (rc.steps || []).map((s) => s.tool).join(", ");
+    item.innerHTML = `
+      <label class="check"><input type="checkbox" data-name="${escapeHtml(rc.name)}" ${rc.enabled ? "checked" : ""}></label>
+      <div style="flex:1">
+        <div class="t-name">${escapeHtml(rc.name)} <span class="badge">${rc.enabled ? "enabled" : "paused"}</span> <span class="badge" style="border-color:var(--border);color:var(--text-dim)">runs: ${rc.runs}</span></div>
+        <div class="t-desc">${escapeHtml(rc.description || "")}</div>
+        <div class="t-desc muted small">trigger: ${escapeHtml(rc.trigger || "manual")} · steps: ${escapeHtml(steps || "—")}</div>
+        ${rc.last_error ? `<div class="t-desc" style="color:var(--err)">last error: ${escapeHtml(String(rc.last_error).slice(0, 120))}</div>` : ""}
+      </div>
+      <div class="btn-row" style="margin:0">
+        <button class="btn rc-run" data-name="${escapeHtml(rc.name)}">Run now</button>
+        <button class="btn danger rc-del" data-name="${escapeHtml(rc.name)}">Delete</button>
+      </div>`;
+    item.querySelector("input").addEventListener("change", async (ev) => {
+      try {
+        await api(`/api/recipes/${encodeURIComponent(rc.name)}/toggle`, "POST", { enabled: ev.target.checked });
+        toast(rc.name + (ev.target.checked ? " enabled" : " paused"), "ok");
+        loadRecipes();
+      } catch (e2) { toast(e2.message, "err"); ev.target.checked = !ev.target.checked; }
+    });
+    item.querySelector(".rc-run").addEventListener("click", async () => {
+      try {
+        const r = await api(`/api/recipes/${encodeURIComponent(rc.name)}/run`, "POST", {});
+        toast(r.ok ? "Recipe completed" : "Recipe failed — see details", r.ok ? "ok" : "err");
+        loadRecipes();
+      } catch (e2) { toast(e2.message, "err"); }
+    });
+    item.querySelector(".rc-del").addEventListener("click", async () => {
+      if (!confirm(`Delete recipe '${rc.name}'?`)) return;
+      try {
+        await fetch(`/api/recipes/${encodeURIComponent(rc.name)}`, { method: "DELETE" });
+        toast("Deleted " + rc.name, "ok");
+        loadRecipes();
+      } catch (e2) { toast(e2.message, "err"); }
+    });
+    list.appendChild(item);
+  }
+}
+
+$("#recipe-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#rc-name").value.trim();
+  const request = $("#rc-request").value.trim();
+  const stepsRaw = $("#rc-steps").value.trim();
+  const trigger = $("#rc-trigger").value;
+  if (!name && !request) { toast("Give the recipe a name or a request", "err"); return; }
+  try {
+    if (stepsRaw) {
+      let stepsJson = stepsRaw;
+      try { stepsJson = JSON.parse(stepsRaw); } catch (_) { /* keep as string */ }
+      await api("/api/recipes", "POST", { name: name || "automation", description: request, trigger, steps_json: stepsJson });
+      toast("Recipe saved", "ok");
+    } else {
+      if (!request) { toast("Describe what the recipe should do, or paste steps JSON", "err"); return; }
+      const r = await api("/api/recipes/compose", "POST", { request, trigger });
+      toast(r.message || "Recipe composed", "ok");
+    }
+    $("#rc-name").value = ""; $("#rc-request").value = ""; $("#rc-steps").value = "";
+    loadRecipes();
   } catch (err) { toast(err.message, "err"); }
 });
 
