@@ -30,6 +30,8 @@ data.txt
 output.txt
 Alarmtext.txt
 *.log
+# Local marketplace sync cache (regenerated from MARKETPLACE_URL)
+james/marketplace.json
 
 # OS / editor junk
 .DS_Store
