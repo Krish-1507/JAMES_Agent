@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAMES</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">
+      <span class="brand-dot"></span> JAMES
+      <span id="version" class="muted small"></span>
+    </div>
+    <button id="new-chat-btn" class="btn primary block">+ New session</button>
+    <div class="side-label">Sessions</div>
+    <div id="session-list" class="session-list"></div>
+    <nav class="sidebar-bottom">
+      <button class="nav-btn active" data-page="chat">💬 Chat</button>
+      <button class="nav-btn" data-page="voice">🎙 Voice</button>
+      <button class="nav-btn" data-page="tools">🧰 Tools</button>
+      <button class="nav-btn" data-page="settings">⚙️ Settings</button>
+    </nav>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <div class="top-left">
+        <select id="provider-select" title="Provider"></select>
+        <select id="model-select" title="Model"></select>
+        <button id="apply-model-btn" class="btn">Apply</button>
+        <span id="session-name" class="muted small"></span>
+      </div>
+      <div class="top-right">
+        <span id="voice-pill" class="pill hidden">🔍 idle</span>
+        <button id="mute-btn" class="btn icon" title="Mute mic">🎤</button>
+        <button id="interrupt-btn" class="btn icon" title="Interrupt">⏹</button>
+        <span id="conn-dot" class="conn-dot" title="Disconnected"></span>
+      </div>
+    </header>
+
+    <section id="page-chat" class="page active">
+      <div id="chat"></div>
+      <div id="tool-activity" class="tool-activity hidden">
+        <div class="tool-activity-head">Live tool activity</div>
+        <div id="tool-list"></div>
+      </div>
+      <form id="composer">
+        <textarea id="composer-input" rows="1" placeholder="Message JAMES… (Enter to send, Shift+Enter for a new line)"></textarea>
+        <button type="submit" id="send-btn" class="btn primary">Send</button>
+      </form>
+    </section>
+
+    <section id="page-voice" class="page">
+      <div class="card">
+        <h2>Voice</h2>
+        <div class="voice-row"><span class="muted">State</span><span id="voice-state" class="pill">—</span></div>
+        <div class="voice-row"><span class="muted">Mic level</span>
+          <div class="level-wrap"><div id="level-bar" class="level-bar"></div></div>
+        </div>
+        <div class="voice-row"><span class="muted">Duplex mode</span><span id="voice-duplex" class="muted"></span></div>
+        <div class="btn-row">
+          <button id="voice-mute-btn" class="btn">Mute mic</button>
+          <button id="voice-interrupt-btn" class="btn">Interrupt</button>
+        </div>
+        <label class="check"><input type="checkbox" id="voice-only-cb"> Voice-only mode (hide chat input)</label>
+        <label class="check"><input type="checkbox" id="voice-enabled-cb"> Voice enabled</label>
+        <p class="hint">Duplex sessions are wake-gated: JAMES listens for the wake word, opens a live session, and closes it after the idle timeout. Speak over an answer to interrupt it.</p>
+      </div>
+    </section>
+
+    <section id="page-tools" class="page">
+      <div class="card">
+        <h2>Tools</h2>
+        <p class="hint">Tools outside the allowlist are denied. Dangerous tools require your confirmation before they run.</p>
+        <div id="tools-list" class="tools-list"></div>
+        <button id="tools-save-btn" class="btn primary">Save tool permissions</button>
+      </div>
+    </section>
+
+    <section id="page-settings" class="page">
+      <div class="card">
+        <h2>Settings</h2>
+        <form id="settings-form">
+          <label>Mode <select id="set-mode"><option value="standard">standard</option><option value="full">full</option></select></label>
+          <label class="check"><input type="checkbox" id="set-dry-run"> Dry run (simulate dangerous actions)</label>
+          <label class="check"><input type="checkbox" id="set-confirm"> Confirm dangerous actions</label>
+          <label class="check"><input type="checkbox" id="set-offline"> Offline mode (block non-loopback egress)</label>
+          <label>Wake engine <select id="set-wake-engine"><option>always</option><option>none</option><option>porcupine</option></select></label>
+          <label>Wake word <input type="text" id="set-wake-word"></label>
+          <label>Assistant name <input type="text" id="set-name"></label>
+          <label>Your name <input type="text" id="set-user-name"></label>
+          <label>STT provider <select id="set-stt"><option>whisper_local</option><option>whisper_api</option><option>google</option><option>none</option></select></label>
+          <label>TTS provider <select id="set-tts"><option>edge</option><option>pyttsx3</option><option>openai</option><option>elevenlabs</option><option>none</option></select></label>
+          <label>Duplex mode <select id="set-duplex"><option value="off">off</option><option value="auto">auto</option><option value="gemini_live">gemini_live</option><option value="openai_realtime">openai_realtime</option><option value="local">local</option></select></label>
+          <button type="submit" class="btn primary">Save settings</button>
+        </form>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

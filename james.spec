@@ -8,6 +8,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ("james/tools/marketplace", "james/tools/marketplace"),
+        ("james/ui/web", "james/ui/web"),
         (".env.example", "."),
     ],
     hiddenimports=[
@@ -26,7 +27,8 @@ a = Analysis(
         "james.core.scheduler",
         "james.core.secrets",
         "james.ui.dashboard",
-        "james.ui.orb",
+        "james.ui.server",
+        "james.ui.shell",
         "james.voice.stt",
         "james.voice.tts",
         "james.tools.base",

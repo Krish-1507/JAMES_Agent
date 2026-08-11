@@ -4,6 +4,41 @@ All notable changes to JAMES are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-11
+
+### Added
+- **Phase-5 web UI** — a browser-based desktop interface that replaces the
+  legacy orb and desktop GUIs:
+  - `james/ui/server.py` — FastAPI sidecar (`python -m james --serve
+    [--port N]`): JSON endpoints for turns, sessions, model switching,
+    settings, tools, voice, approvals, and onboarding, plus a Server-Sent
+    Events stream that broadcasts assistant events
+    (`user`/`thinking`/`reply`/`tool_start`/`tool`/`speak`/...) to browsers
+    and embedded shells.
+  - `james/ui/web/` — a dependency-free vanilla-JS single-page app: streaming
+    chat threads, live tool-activity panel, model switcher, sessions sidebar,
+    voice page, settings/tools pages, deny-by-default approval modal, and an
+    onboarding wizard.
+  - `james/ui/shell.py` — a Qt shell with system-tray support that hosts the
+    web UI; when Qt is unavailable it falls back to the default browser.
+  - `james` now opens the shell/web UI by default; legacy
+    `james/ui/orb.py` and `james/ui/desktop.py` are removed. `james.spec`,
+    `pyproject.toml` (fastapi/uvicorn core deps, optional `[ui]` extra with
+    PyQt5/PyQtWebEngine), and `james/onboarding.py` (shared
+    `write_env`/`configure` used by the web wizard) are updated accordingly.
+- **Server test suite** — `tests/test_phase5_server_ui.py`: 21 tests covering
+  the event bus, static asset serving, path-traversal protection, turns,
+  sessions, model switching, settings validation, voice controls, HTTP
+  approvals (allow-once, default-deny), and the onboarding endpoint.
+
+### Fixed
+- **rich 14.x compatibility** — `Console.status()` dropped its `style=`
+  keyword argument in rich 14, and `james/ui/cli.py` passed it, so every turn
+  crashed into "Something went wrong." before any reply. The thinking spinner
+  now adapts to the installed rich version.
+- **Silent agent failures** — when an agent turn raises, an `error` event is
+  now published so UIs surface a toast instead of hanging silently.
+
 ## [0.4.0] - 2026-08-10
 
 ### Added

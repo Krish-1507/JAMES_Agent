@@ -10,6 +10,7 @@ import os
 import queue
 import re
 import tempfile
+import threading
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
@@ -127,9 +128,11 @@ class Assistant:
         self.session: str | None = session
         self._history_file = _session_path(session) if session else settings.assistant.history_file
         self._load_history()
-        # Optional GUI text input queue (orb): when set, text_loop reads from
-        # it instead of stdin so typed text stays first-class in the desktop UI.
+        # Optional GUI text input queue (web UI / shell): when set, text_loop
+        # reads from it instead of stdin so typed text stays first-class.
         self._text_queue: queue.Queue | None = None
+        # Serializes handle_turn so typed and spoken turns never interleave.
+        self._turn_lock = threading.Lock()
         self.duplex = None  # live DuplexController while full-duplex voice runs
         configure_delegate(self.llm, on_tool=self._on_tool, on_tool_start=self._on_tool_start)
         configure_computer_use(self.llm)
@@ -398,6 +401,18 @@ class Assistant:
     def current_session(self) -> str:
         return self.session or "default"
 
+    def new_session(self) -> str:
+        """Start a fresh named session (mirrors the /new command)."""
+        name = f"conversation-{int(datetime.now().timestamp())}"
+        self.switch_session(name)
+        return name
+
+    def clear_history(self) -> None:
+        """Wipe the current session's in-memory + persisted history (/clear)."""
+        self.history = []
+        self._history_encrypted = b""
+        self._save_history()
+
     def _summarize_history(self) -> None:
         if len(self.history) < 20:
             return
@@ -528,23 +543,25 @@ class Assistant:
     def handle_turn(self, user_text: str) -> None:
         if not user_text:
             return
-        self._emit({"type": "user", "text": user_text})
-        if getattr(self, "cli", None):
-            self.cli.print_user(user_text)
-        else:
-            console.print(f"[green]{settings.assistant.user_name}:[/green] {user_text}")
-        try:
-            self._emit({"type": "thinking"})
+        with self._turn_lock:
+            self._emit({"type": "user", "text": user_text})
             if getattr(self, "cli", None):
-                with self.cli.thinking():
-                    reply = self.think(user_text)
+                self.cli.print_user(user_text)
             else:
-                reply = self.think(user_text)
-        except Exception:
-            self.log.exception("Agent error")
-            reply = "Something went wrong. Please try again."
-        self._emit({"type": "reply", "text": reply})
-        self.speak(reply, cli=getattr(self, "cli", None))
+                console.print(f"[green]{settings.assistant.user_name}:[/green] {user_text}")
+            try:
+                self._emit({"type": "thinking"})
+                if getattr(self, "cli", None):
+                    with self.cli.thinking():
+                        reply = self.think(user_text)
+                else:
+                    reply = self.think(user_text)
+            except Exception as exc:
+                self.log.exception("Agent error")
+                self._emit({"type": "error", "text": exc.__class__.__name__ + ": " + str(exc)})
+                reply = "Something went wrong. Please try again."
+            self._emit({"type": "reply", "text": reply})
+            self.speak(reply, cli=getattr(self, "cli", None))
 
     def greet(self) -> None:
         import datetime
@@ -560,6 +577,9 @@ class Assistant:
         if mode != "off":
             self._voice_loop_duplex()
             return
+        if self._text_queue is not None:
+            # GUI mode: typed text must stay first-class in every voice loop.
+            threading.Thread(target=self._text_drain_loop, name="voice-text-drain", daemon=True).start()
         engine = (settings.assistant.wake_engine or "always").lower()
         if engine == "none":
             self.speak("Listening continuously. Say 'exit' or 'stop' to quit.")
@@ -645,6 +665,17 @@ class Assistant:
         if queue is not None:
             queue.put(text)
 
+    def _text_drain_loop(self) -> None:
+        """Consume the GUI text queue while a non-duplex voice loop runs."""
+        while True:
+            try:
+                text = self._text_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            text = (text or "").strip()
+            if text:
+                self.handle_turn(text)
+
     def _voice_loop_wake_word(self) -> None:
         self.speak(f"Say '{settings.assistant.wake_word}' to wake me up.")
         while True:
@@ -728,7 +759,7 @@ class Assistant:
         arg = parts[1].strip() if len(parts) > 1 else ""
 
         if verb == "/new":
-            self.switch_session(f"conversation-{int(datetime.now().timestamp())}")
+            self.new_session()
             console.print(f"[dim]New session started ({self.current_session()}).[/dim]")
             return True
         if verb == "/sessions":
@@ -746,9 +777,7 @@ class Assistant:
             console.print(f"[dim]Resumed session '{self.current_session()}'.[/dim]")
             return True
         if verb == "/clear":
-            self.history = []
-            self._history_encrypted = b""
-            self._save_history()
+            self.clear_history()
             console.print("[dim]Current session cleared.[/dim]")
             return True
         if verb == "/export":

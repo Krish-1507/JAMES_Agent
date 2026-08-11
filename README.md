@@ -17,7 +17,7 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
   logo, status header, colour-coded message panels, live thinking spinner, and
   a styled input field.
 - Model selection everywhere — pick provider and model interactively in the
-  terminal (`/provider`, `/model`) and from the desktop app dropdown. Choices
+  terminal (`/provider`, `/model`) and from the web UI dropdown. Choices
   persist to your `.env`.
 - OpenAI, Anthropic, Gemini, OpenRouter, Groq, Mistral, xAI (Grok), DeepSeek,
   Together, Cerebras, Cohere, and any OpenAI-compatible custom endpoint (Ollama,
@@ -35,7 +35,7 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
   speech-to-speech with Gemini Live or OpenAI Realtime — or a fully local
   pipeline (VAD + faster-whisper + edge-tts streaming). Typed text stays
   first-class: you can interrupt or steer the conversation with the keyboard
-  from the desktop app.
+  from the web UI.
 - A closed learning loop: skills forged in one session are re-surfaced when
   the same kind of request comes up again, conversation summaries persist to
   long-term memory for cross-session recall, and the marketplace can publish
@@ -54,7 +54,12 @@ The project’s goal is simple: make a desktop agent that is useful, inspectable
 - Multimodal input across providers: attach images to any turn for OpenAI,
   Anthropic, and Gemini vision models.
 - Optional offline mode that blocks non-loopback network egress.
-- A lightweight PyQt orb UI and local web dashboard.
+- A browser-based desktop UI (`james` or `james --serve`): a dependency-free
+  single-page app with streaming chat threads, live tool activity, a model
+  switcher, sessions sidebar, voice controls, settings and tools pages,
+  deny-by-default approval prompts, and an onboarding wizard — served by a
+  local FastAPI sidecar and wrapped in a Qt shell (system tray,
+  minimize-to-tray) that falls back to the default browser when Qt is missing.
 
 ## Quick start
 
@@ -84,7 +89,8 @@ from the key format and writes a working `.env` for you.
 **Open a new terminal**, then:
 
 ```bash
-james              # desktop app (default)
+james              # desktop shell (Qt window, or browser fallback)
+james --serve      # web UI in your default browser (http://127.0.0.1:8124)
 james --text       # terminal CLI
 james --voice      # terminal voice mode
 james --setup      # re-run the wizard anytime
@@ -201,8 +207,8 @@ OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview
 
 Duplex sessions are **wake-gated**: the controller sits idle until the wake
 word, opens a session on wake, and returns to idle after the idle timeout or a
-spoken exit — so the mic is not continuously transcribed. The desktop orb
-shows the live state (idle / listening / transcribing / thinking / speaking),
+spoken exit — so the mic is not continuously transcribed. The web UI shows
+the live state (idle / listening / transcribing / thinking / speaking),
 a mic level meter, and controls for mute, interrupt, and voice-only mode;
 typed text routes into the live session at any moment. In the terminal,
 `james --voice` runs the same controller with CLI printing.
@@ -230,7 +236,7 @@ ENABLE_TRUSTED_EXTERNAL_PLUGINS=false
 ```
 
 - Dangerous calls require confirmation; non-interactive contexts deny them by default.
-- The desktop shows a deny-by-default approval dialog with redacted arguments for every dangerous call.
+- The desktop/web UI shows a deny-by-default approval dialog with redacted arguments for every dangerous call.
 - `run_shell_command` and scheduled commands use a small read-only command policy. Arbitrary interpreter flags and mutating utilities are rejected.
 - Agent-controlled paths are bounded to `WORKSPACE_DIR`; deletion uses recoverable workspace trash.
 - Shell, scheduled command, deletion, and plugin execution runs in spawned workers with timeouts.
@@ -359,10 +365,16 @@ Core modules:
 - `james/core/assistant.py` — orchestration, encrypted history, and `switch_model` (live provider/agent rebuild).
 - `james/core/guard.py` — offline egress guard.
 - `james/ui/cli.py` — the OpenCode-style terminal renderer (`JamesCLI`).
+- `james/ui/server.py` — the FastAPI sidecar behind the web UI: JSON API
+  (turns, sessions, model, settings, tools, voice, approvals, onboarding),
+  SSE event broadcast, and static asset serving.
+- `james/ui/shell.py` — the Qt shell hosting the web UI (system tray,
+  minimize-to-tray) with a browser fallback when Qt is missing.
+- `james/ui/web/` — the dependency-free single-page web app.
 - `james/voice/duplex.py` — full-duplex voice: VAD, wake gate, and the
   `DuplexController` state machine behind the Gemini Live / OpenAI Realtime /
   local streaming engines (see the full-duplex voice section above).
-- `james/llm/catalog.py` — the shared provider/model catalog used by the CLI pickers, the desktop dropdown, and setup.
+- `james/llm/catalog.py` — the shared provider/model catalog used by the CLI pickers, the web UI dropdown, and setup.
 - `james/sdk/` — the plugin authoring SDK (manifest, validation, scaffolding).
 
 ## Roadmap to v1

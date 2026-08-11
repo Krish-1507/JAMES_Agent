@@ -7,10 +7,10 @@ expressed as a **tool**; the agent loop turns natural language into tool calls.
 
 ```text
 ┌────────────────────────────────────────────┐
-│ CLI / GUI / Dashboard / Voice loop          │
-│   • JamesCLI (OpenCode-style rich renderer) │
-│   • PyQt orb (desktop, catalog dropdown,    │
-│     duplex voice controls)                  │
+│ CLI / Shell / Web UI / Voice loop          │
+│   • JamesCLI (OpenCode-style rich renderer)│
+│   • Qt shell + FastAPI sidecar + SPA       │
+│     (chat, catalog, approvals, voice)      │
 ├────────────────────────────────────────────┤
 │ Assistant (sessions, history, memory,      │
 │           skills, events, switch_model)     │
@@ -37,8 +37,8 @@ interchangeable engines — Gemini Live (`GeminiLiveSession`), OpenAI Realtime
 from either cloud engine are executed through the same gated, audited
 `ToolRegistry`; local turns use the agent loop's tool executor. The assistant
 exposes thread-safe controls (`mute_voice`, `interrupt_voice`,
-`set_voice_only`, `send_voice_text`) that the orb GUI wires to buttons and a
-text input, so typed text and voice share one conversation.
+`set_voice_only`, `send_voice_text`) that the web UI and Qt shell wire to
+buttons and a text input, so typed text and voice share one conversation.
 
 ## Core pieces
 
@@ -68,8 +68,15 @@ text input, so typed text and voice share one conversation.
   any OpenAI-compatible custom/local endpoint) with automatic failover.
 - **`james.llm.catalog`** — the shared provider/model catalog plus
   `save_llm_config`, which persists `LLM_PROVIDER`/`LLM_MODEL` back to `.env`.
-  Used by the CLI pickers, the desktop dropdown, and the setup wizard.
+  Used by the CLI pickers, the web UI dropdown, and the setup wizard.
 - **`james.ui.cli`** — `JamesCLI`, the rich/OpenCode-style terminal renderer.
+- **`james.ui.server`** — FastAPI sidecar: JSON API (turns, sessions, model,
+  settings, tools, voice, approvals, onboarding), SSE event broadcast, and
+  static web serving.
+- **`james.ui.shell`** — Qt shell hosting the web UI with system-tray
+  support, falling back to the default browser when Qt is missing.
+- **`james.ui.web`** — the dependency-free single-page web app (streaming
+  chat, tool activity, approvals, onboarding).
 - **`james.voice.duplex`** — the full-duplex voice runtime: `VAD`, `WakeGate`,
   `DuplexController`, the Gemini Live / OpenAI Realtime / local streaming
   session engines, `LocalStreamingSTT`, and barge-in-capable `StreamTTS` (see

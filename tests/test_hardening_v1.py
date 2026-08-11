@@ -1,9 +1,10 @@
-"""Release-hardening coverage for workspace, signing, isolation, and desktop approvals."""
+"""Release-hardening coverage for workspace, signing, isolation, and UI approvals."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -56,27 +57,23 @@ def test_plugin_signature_detects_tampering(plugin_dir: Path) -> None:
 
 
 @pytest.mark.skipif(
-    os.getenv("CI") == "true" and os.name != "nt", reason="Qt runtime optional in CI"
+    os.getenv("CI") == "true" and os.name != "nt", reason="approval loop timing in CI"
 )
-def test_desktop_approval_defaults_to_deny_and_redacts(monkeypatch: pytest.MonkeyPatch) -> None:
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    pytest.importorskip("PyQt5")
-    from PyQt5.QtCore import QTimer
-    from PyQt5.QtWidgets import QApplication, QPlainTextEdit
+def test_ui_approval_defaults_to_deny_and_redacts(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
 
-    from james.ui.desktop import _ApprovalDialog, _ApprovalRequest
+    from james.ui import server as server_module
+    from james.ui.server import _redact_args
 
-    app = QApplication.instance() or QApplication([])
-    request = _ApprovalRequest("run_shell_command", {"command": "echo ok", "api_key": "secret"})
-    dialog = _ApprovalDialog(request)
-    details = dialog.findChild(QPlainTextEdit, "approvalDetails")
-    assert details is not None
-    assert "secret" not in details.toPlainText()
-    assert "***REDACTED***" in details.toPlainText()
-    QTimer.singleShot(0, dialog.reject)
-    dialog.exec_()
-    assert request.allowed is False
-    app.processEvents()
+    redacted = _redact_args("run_shell_command", {"command": "echo ok", "api_key": "secret"})
+    assert "secret" not in json.dumps(redacted)
+    assert redacted["api_key"] == "***"
+
+    runtime = server_module.ServerRuntime()
+    monkeypatch.setattr(server_module, "_NO_CLIENT_GRACE", 0.05)
+    monkeypatch.setattr(server_module, "_APPROVAL_TIMEOUT", 5.0)
+    allowed = runtime._confirm("run_shell_command", {"command": "rm -rf /", "api_key": "secret"})
+    assert allowed is False
 
 
 def test_assistant_preserves_confirmation_and_hooks_on_model_switch(
@@ -111,43 +108,89 @@ def test_assistant_preserves_confirmation_and_hooks_on_model_switch(
     assert instance.agent.on_tool_start is start_hook
 
 
-def test_desktop_structure_and_custom_model_editor(monkeypatch: pytest.MonkeyPatch) -> None:
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    pytest.importorskip("PyQt5")
-    from PyQt5.QtWidgets import QApplication
+def test_ui_web_assets_expose_required_controls() -> None:
+    """The served single-page UI must keep the control surface wired up."""
+    from importlib.resources import files
 
-    from james.ui import desktop
-
-    app = QApplication.instance() or QApplication([])
-    monkeypatch.setattr(desktop._Worker, "start", lambda self: None)
-    monkeypatch.setattr(desktop._Worker, "stop", lambda self: None)
-    monkeypatch.setattr(desktop._Worker, "wait", lambda self, _timeout=0: True)
-    window = desktop.DesktopWindow()
-    assert window.provider_combo.objectName() == "providerCombo"
-    assert window.model_combo.objectName() == "modelCombo"
-    assert window.composer.objectName() == "chatComposer"
-    assert window.activity.objectName() == "activityList"
-    assert window.restore_button.objectName() == "restoreLastDeletedButton"
-    window._populate_models("custom", "local-model")
-    assert window.model_combo.isEditable()
-    window.close()
-    app.processEvents()
+    html = (files("james.ui.web") / "index.html").read_text(encoding="utf-8")
+    for control in (
+        "provider-select",
+        "model-select",
+        "composer-input",
+        "session-list",
+        "tool-list",
+        "voice-pill",
+        "modal-root",
+        "settings-form",
+    ):
+        assert control in html, f"missing control: {control}"
+    for script in ("/static/app.js", "/static/style.css"):
+        assert script in html
 
 
-def test_desktop_approval_allow_once() -> None:
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    pytest.importorskip("PyQt5")
-    from PyQt5.QtCore import QTimer
-    from PyQt5.QtWidgets import QApplication, QPushButton
+def test_ui_approval_allow_once_via_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi.testclient import TestClient
 
-    from james.ui.desktop import _ApprovalDialog, _ApprovalRequest
+    from james.ui.server import ServerRuntime, create_app
 
-    app = QApplication.instance() or QApplication([])
-    request = _ApprovalRequest("delete_file", {"path": "notes.txt"})
-    dialog = _ApprovalDialog(request)
-    allow = dialog.findChild(QPushButton, "approvalAllowButton")
-    assert allow is not None
-    QTimer.singleShot(0, allow.click)
-    dialog.exec_()
-    assert request.allowed is True
-    app.processEvents()
+    class FakeAssistant:
+        history: ClassVar[list] = []
+        registry = type("R", (), {"schemas": staticmethod(lambda: [])})()
+        sessions: ClassVar[list[str]] = ["default"]
+        session = "default"
+
+        def current_session(self) -> str:  # pragma: no cover - trivial
+            return self.session
+
+        def list_sessions(self) -> list[str]:  # pragma: no cover - trivial
+            return self.sessions
+
+        def new_session(self) -> str:  # pragma: no cover - trivial
+            self.session = f"s{len(self.sessions) + 1}"
+            self.sessions.append(self.session)
+            return self.session
+
+        def switch_session(self, name: str) -> None:  # pragma: no cover - trivial
+            if name in self.sessions:
+                self.session = name
+
+        def clear_history(self) -> None:  # pragma: no cover - trivial
+            self.history = []
+
+        def switch_model(self, provider: str, model: str) -> bool:  # pragma: no cover - trivial
+            return True
+
+        def send_voice_text(self, text: str) -> None:  # pragma: no cover - trivial
+            pass
+
+    runtime = ServerRuntime(assistant_factory=FakeAssistant)
+    runtime._assistant = runtime._assistant_factory()
+    runtime._assistant.on_event = runtime._on_event
+    runtime.bus.connect()  # a client is watching
+
+    results: list = []
+
+    def run_confirm() -> None:
+        results.append(runtime._confirm("delete_file", {"path": "notes.txt"}))
+
+    import threading
+
+    thread = threading.Thread(target=run_confirm)
+    thread.start()
+    try:
+        client = TestClient(create_app(runtime))
+        req_id = None
+        for _ in range(100):
+            pending = [e for e in runtime.bus.drain(0)[0] if e["payload"]["type"] == "approval_requested"]
+            if pending:
+                req_id = pending[-1]["payload"]["id"]
+                break
+            import time
+
+            time.sleep(0.05)
+        assert req_id is not None, "approval request never surfaced"
+        assert client.post(f"/api/approvals/{req_id}", json={"allowed": True}).status_code == 200
+    finally:
+        thread.join(timeout=10)
+
+    assert results == [True]

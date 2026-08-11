@@ -150,8 +150,12 @@ class JamesCLI:
 
         @contextmanager
         def _spin() -> Iterator[None]:
-            with self.console.status("JAMES is thinking…", spinner="dots", style=_DIM):
-                yield
+            try:
+                with self.console.status("JAMES is thinking…", spinner="dots", spinner_style=_DIM):
+                    yield
+            except TypeError:  # rich <14 used ``style=`` instead of ``spinner_style=``
+                with self.console.status("JAMES is thinking…", spinner="dots", style=_DIM):
+                    yield
 
         return _spin()
 

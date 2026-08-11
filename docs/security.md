@@ -32,7 +32,7 @@ Shell commands, scheduled commands, recoverable deletion, and plugin tool calls 
 
 All agent-controlled file paths are canonicalized against `WORKSPACE_DIR`. Absolute paths are accepted only when they resolve inside that workspace; parent traversal and symlink escapes are rejected. Deletion moves items to `.james_trash` for recovery rather than permanently unlinking them.
 
-The desktop app supplies a dedicated confirmation handler. Dangerous actions show a deny-by-default modal with redacted arguments and one-time approval; closing or timing out denies the call.
+The desktop/web UI supplies a dedicated confirmation handler. Dangerous actions show a deny-by-default modal with redacted arguments and one-time approval; closing or timing out denies the call.
 
 This policy is defense in depth; use `standard` mode and `ALLOWED_TOOLS` when possible.
 

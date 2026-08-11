@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -153,17 +154,62 @@ def test_rate_limit_is_thread_safe(isolated_workspace: Path) -> None:
     assert sum(1 for r in results if r) == 50
 
 
-# --- Bug 10: orb model switcher updates live settings -----------------------
-def test_orb_model_change_updates_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+# --- Bug 10: model switcher must update the live settings -------------------
+def test_model_change_updates_settings_and_publishes() -> None:
+    """The web model switcher delegates to the assistant and the settings
+    object so the running session picks the new model without a restart."""
+    from james.ui.server import ServerRuntime
+
+    class FakeAssistant:
+        history: ClassVar[list] = []
+        registry = type("R", (), {"schemas": staticmethod(lambda: [])})()
+        sessions: ClassVar[list[str]] = ["default"]
+        session = "default"
+        switched: ClassVar[list[tuple[str, str]]] = []
+
+        def current_session(self) -> str:
+            return self.session
+
+        def list_sessions(self) -> list[str]:
+            return self.sessions
+
+        def new_session(self) -> str:  # pragma: no cover - trivial
+            return "default"
+
+        def switch_session(self, name: str) -> None:  # pragma: no cover - trivial
+            if name in self.sessions:
+                self.session = name
+
+        def clear_history(self) -> None:  # pragma: no cover - trivial
+            self.history = []
+
+        def switch_model(self, provider: str, model: str) -> bool:
+            self.switched.append((provider, model))
+            # Mirrors the real Assistant: the live settings object is updated.
+            from james.config import settings as live
+
+            live.llm.provider = provider
+            live.llm.model = model
+            return True
+
+        def send_voice_text(self, text: str) -> None:  # pragma: no cover - trivial
+            pass
+
+    runtime = ServerRuntime(assistant_factory=FakeAssistant)
+    runtime._assistant = runtime._assistant_factory()
+    runtime._assistant.on_event = runtime._on_event
+    before = len(runtime.bus.drain(0)[0])
+
+    original_provider, original_model = settings.llm.provider, settings.llm.model
     try:
-        from james.ui.orb import OrbWindow
-    except ImportError:
-        pytest.skip("PyQt5 not installed")
+        ok, err = runtime.switch_model("openai", "gpt-4o")
+        assert ok and not err
+        assert runtime.assistant.switched == [("openai", "gpt-4o")]
+        assert settings.llm.provider == "openai"
+        assert settings.llm.model == "gpt-4o"
+    finally:
+        settings.llm.provider = original_provider
+        settings.llm.model = original_model
 
-    monkeypatch.setattr("james.llm.catalog.save_llm_config", lambda provider, model: None)
-
-    window = OrbWindow.__new__(OrbWindow)
-    window.log = type("_Log", (), {"appendPlainText": lambda self, s: None})()
-    window._on_model_change("groq:llama-3.3-70b")
-    assert settings.llm.provider == "groq"
-    assert settings.llm.model == "llama-3.3-70b"
+    events = runtime.bus.drain(before)[0]
+    assert events[-1]["payload"] == {"type": "model_changed", "provider": "openai", "model": "gpt-4o"}

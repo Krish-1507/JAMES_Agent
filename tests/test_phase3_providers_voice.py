@@ -50,25 +50,28 @@ class TestProviderPresets:
         ],
     )
     def test_preset_builds_openai_compatible_provider(self, provider: str) -> None:
-        provider_instance = build_provider(LLMSettings(provider=provider, model="test-model"))
+        provider_instance = build_provider(
+            LLMSettings(provider=provider, model="test-model", failover=[])
+        )
         assert isinstance(provider_instance, OpenAICompatibleProvider)
         assert provider_instance.model == "test-model"
 
     def test_custom_uses_configured_base_url(self) -> None:
         provider_instance = build_provider(
             LLMSettings(
-                provider="custom", model="llama3", custom_base_url="http://127.0.0.1:11434/v1"
+                provider="custom", model="llama3", custom_base_url="http://127.0.0.1:11434/v1",
+                failover=[],
             )
         )
         assert isinstance(provider_instance, OpenAICompatibleProvider)
 
     def test_native_providers_keep_their_classes(self) -> None:
         assert isinstance(
-            build_provider(LLMSettings(provider="anthropic", model="claude-x")),
+            build_provider(LLMSettings(provider="anthropic", model="claude-x", failover=[])),
             AnthropicProvider,
         )
         assert isinstance(
-            build_provider(LLMSettings(provider="gemini", model="gemini-x")),
+            build_provider(LLMSettings(provider="gemini", model="gemini-x", failover=[])),
             GeminiProvider,
         )
 

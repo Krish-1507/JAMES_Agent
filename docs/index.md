@@ -12,7 +12,7 @@ JAMES is an alpha-stage, desktop-first LLM assistant. It is designed for experim
 2. Keep `JAMES_MODE=standard` and `CONFIRM_DANGEROUS_ACTIONS=true`.
 3. Run `james --check`, then `james doctor`.
 4. Start with `james --text` and only enable tools you need. `james` with no
-   arguments opens the desktop app.
+   arguments opens the desktop shell (Qt window, or browser fallback).
 
 The repository [README](https://github.com/Krish-1507/JAMES_Agent#readme) contains installation, provider, configuration, and roadmap guidance.
 
@@ -36,11 +36,16 @@ JAMES is **alpha**. The current hardening baseline includes explicit desktop app
 
 - **Terminal CLI** (`james --text`) uses an OpenCode-style chat UI: ASCII logo,
   status header, colour-coded message panels, spinner, and styled input.
+- **Desktop shell / web UI** (`james` or `james --serve`): a Qt shell with
+  system-tray support hosts — or falls back to the default browser for — a
+  dependency-free single-page app: streaming chat, live tool activity, model
+  switcher, sessions sidebar, voice controls, settings/tools pages,
+  deny-by-default approval prompts, and an onboarding wizard.
 - **Voice** (`james --voice`): turn-based speech-to-speech by default, or
   full-duplex (`DUPLEX_MODE=gemini_live|openai_realtime|local|auto`) with
   wake-gated sessions, interruption, and barge-in. See the README
   [full-duplex voice section](https://github.com/Krish-1507/JAMES_Agent#full-duplex-voice-speak-and-listen-at-once).
-- **Model selection** is available in both the terminal and the desktop app:
-  `/provider` and `/model` open interactive pickers in the CLI, and the desktop
+- **Model selection** is available in both the terminal and the web UI:
+  `/provider` and `/model` open interactive pickers in the CLI, and the web UI
   dropdown applies a `provider:model` immediately. Choices persist to `.env`
   via the shared catalog in `james/llm/catalog.py`.

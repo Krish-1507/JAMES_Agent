@@ -38,10 +38,10 @@ def _ui_available() -> bool:
         return False
 
 
-def _launch_desktop() -> int:
+def _launch_desktop(port: int = 8124) -> int:
     from james.ui import run_ui
 
-    return run_ui()
+    return run_ui(port=port)
 
 
 def _scaffold_tool(name: str) -> int:
@@ -137,6 +137,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--ui", action="store_true", help="Force the desktop app (default when no mode is given)."
     )
+    parser.add_argument(
+        "--serve", action="store_true", help="Run the web UI in the browser (no Qt shell)."
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8124,
+        help="Port for --serve and the desktop app (default 8124).",
+    )
     parser.add_argument("--provider", help=f"Override LLM_PROVIDER ({PROVIDER_HELP}).")
     parser.add_argument("--model", help="Override the model id.")
     parser.add_argument("--check", action="store_true", help="Validate configuration and exit.")
@@ -231,6 +240,11 @@ def main(argv: list[str] | None = None) -> int:
             print("\nDashboard stopped.")
             return 0
 
+    if args.serve:
+        from .ui.server import serve_cli
+
+        return serve_cli(port=args.port)
+
     if args.eval:
         from james.evaluation import Evaluator
 
@@ -279,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
         or args.offline
     )
     if want_desktop and _ui_available():
-        return _launch_desktop()
+        return _launch_desktop(port=args.port)
 
     if want_desktop:
         print(

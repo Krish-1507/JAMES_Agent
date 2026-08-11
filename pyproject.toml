@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "james-assistant"
-version = "0.4.0"
+version = "0.5.0"
 description = "JAMES is an alpha-stage, desktop-first LLM assistant with explicit safety boundaries."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ classifiers = [
 
 # Core dependencies are enough to run JAMES in text mode with any LLM provider.
 # Everything else is an optional extra so the base install stays light.
+# fastapi/uvicorn power the `james serve` web UI (Phase-3 desktop app v2).
 dependencies = [
     "cryptography>=42.0.0",
     "python-dotenv>=1.0.0",
@@ -32,11 +33,13 @@ dependencies = [
     "openai>=1.30.0",
     "anthropic>=0.25.0",
     "google-genai>=1.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
 ]
 
 [project.optional-dependencies]
-# Orb GUI (live task canvas)
-ui = ["PyQt5>=5.15.0"]
+# Desktop shell (hosts the `james serve` web UI in a native window + system tray)
+ui = ["PyQt5>=5.15.0", "PyQtWebEngine>=5.15.6"]
 # Model Context Protocol - inherit thousands of community servers
 mcp = ["mcp>=1.2.0"]
 # Document generation and reading
@@ -76,6 +79,7 @@ dev = [
 # Everything optional
 all = [
     "PyQt5>=5.15.0",
+    "PyQtWebEngine>=5.15.6",
     "mcp>=1.2.0",
     "python-docx>=1.1.0",
     "python-pptx>=0.6.23",
@@ -127,3 +131,6 @@ python_files = ["test_*.py"]
 
 [tool.setuptools.packages.find]
 include = ["james*"]
+
+[tool.setuptools.package-data]
+"james.ui.web" = ["*.html", "*.js", "*.css"]
