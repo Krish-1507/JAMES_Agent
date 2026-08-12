@@ -20,4 +20,11 @@ jobs:
           pip install pytest pytest-timeout "python-multipart>=0.0.9"
       - name: Full suite
         timeout-minutes: 10
-        run: python -m pytest -q --timeout=120
+        run: PYTHONPATH=. python -m pytest -q --timeout=120 -p debug_diag
+        continue-on-error: true
+      - name: Diagnostics
+        run: |
+          echo "== ulimit =="; ulimit -a
+          echo "== free =="; free -m
+          echo "== max_map_count =="; sysctl vm.max_map_count 2>/dev/null || true
+          echo "== last pytest tmp =="; ls -la /tmp 2>/dev/null | head -5
