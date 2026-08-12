@@ -115,15 +115,12 @@ def _guarded_create(*args, **kwargs):
     return _orig_create(*args, **kwargs)
 
 
-def _guarded_httpx_request(self, url, **kwargs):
-    from urllib.parse import urlparse
-
-    parsed = urlparse(str(url))
-    host = parsed.hostname
+def _guarded_httpx_request(self, request, **kwargs):
+    host = request.url.host if hasattr(request.url, "host") else None
     if host and not _is_loopback(host):
-        _audit(host, parsed.port or 443, False)
+        _audit(host, request.url.port or 443, False)
         raise BlockedEgress(f"Blocked egress to {host} (offline mode, httpx)")
-    return _orig_httpx_request(self, url, **kwargs)
+    return _orig_httpx_request(self, request, **kwargs)
 
 
 def _guarded_httpx_send(self, request, **kwargs):
@@ -156,7 +153,7 @@ def _guarded_urllib_request(url, **kwargs):
     return _orig_urllib_request(url, **kwargs)
 
 
-def _guarded_urllib3_request(self, url, **kwargs):
+def _guarded_urllib3_request(self, method, url, **kwargs):
     from urllib.parse import urlparse
 
     parsed = urlparse(str(url))
@@ -164,10 +161,10 @@ def _guarded_urllib3_request(self, url, **kwargs):
     if host and not _is_loopback(host):
         _audit(host, parsed.port or 443, False)
         raise BlockedEgress(f"Blocked egress to {host} (offline mode, urllib3)")
-    return _orig_urllib3_request(self, url, **kwargs)
+    return _orig_urllib3_request(self, method, url, **kwargs)
 
 
-def _guarded_requests_request(self, url, **kwargs):
+def _guarded_requests_request(self, method, url, **kwargs):
     from urllib.parse import urlparse
 
     parsed = urlparse(str(url))
@@ -175,7 +172,7 @@ def _guarded_requests_request(self, url, **kwargs):
     if host and not _is_loopback(host):
         _audit(host, parsed.port or 443, False)
         raise BlockedEgress(f"Blocked egress to {host} (offline mode, requests)")
-    return _orig_requests_request(self, url, **kwargs)
+    return _orig_requests_request(self, method, url, **kwargs)
 
 
 def install_offline_guard() -> None:

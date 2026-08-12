@@ -92,16 +92,17 @@ def test_guard_create_connection_blocks(monkeypatch: pytest.MonkeyPatch) -> None
 def test_guard_httpx_patches(monkeypatch: pytest.MonkeyPatch) -> None:
     from james.core import guard
 
-    monkeypatch.setattr(guard, "_orig_httpx_request", lambda self, url, **k: "ok")
-    assert guard._guarded_httpx_request(object(), "http://localhost/x") == "ok"
-    with pytest.raises(guard.BlockedEgress):
-        guard._guarded_httpx_request(object(), "https://evil.com/x")
+    monkeypatch.setattr(guard, "_orig_httpx_request", lambda self, request, **k: "ok")
 
     class FakeRequest:
         url = type("U", (), {"host": "localhost", "port": 443})()
 
     class FakeRequestBad:
         url = type("U", (), {"host": "evil.com", "port": 443})()
+
+    assert guard._guarded_httpx_request(object(), FakeRequest()) == "ok"
+    with pytest.raises(guard.BlockedEgress):
+        guard._guarded_httpx_request(object(), FakeRequestBad())
 
     monkeypatch.setattr(guard, "_orig_httpx_send", lambda self, request, **k: "ok")
     assert guard._guarded_httpx_send(object(), FakeRequest()) == "ok"
@@ -126,15 +127,15 @@ def test_guard_http_client_urllib_urllib3_requests(monkeypatch: pytest.MonkeyPat
     with pytest.raises(guard.BlockedEgress):
         guard._guarded_urllib_request("http://evil.com/")
 
-    monkeypatch.setattr(guard, "_orig_urllib3_request", lambda self, url, **k: "ok")
-    assert guard._guarded_urllib3_request(object(), "http://localhost/") == "ok"
+    monkeypatch.setattr(guard, "_orig_urllib3_request", lambda self, method, url, **k: "ok")
+    assert guard._guarded_urllib3_request(object(), "GET", "http://localhost/") == "ok"
     with pytest.raises(guard.BlockedEgress):
-        guard._guarded_urllib3_request(object(), "http://evil.com/")
+        guard._guarded_urllib3_request(object(), "GET", "http://evil.com/")
 
-    monkeypatch.setattr(guard, "_orig_requests_request", lambda self, url, **k: "ok")
-    assert guard._guarded_requests_request(object(), "http://localhost/") == "ok"
+    monkeypatch.setattr(guard, "_orig_requests_request", lambda self, method, url, **k: "ok")
+    assert guard._guarded_requests_request(object(), "GET", "http://localhost/") == "ok"
     with pytest.raises(guard.BlockedEgress):
-        guard._guarded_requests_request(object(), "http://evil.com/")
+        guard._guarded_requests_request(object(), "GET", "http://evil.com/")
 
 
 def test_guard_audit_writes_log(monkeypatch: pytest.MonkeyPatch, isolated_workspace: Path) -> None:

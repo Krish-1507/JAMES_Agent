@@ -17,13 +17,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install -e ".[docs]"
-          pip install pytest pytest-timeout "python-multipart>=0.0.9"
-      - name: Full suite
+          pip install pytest pytest-timeout pytest-xdist "python-multipart>=0.0.9"
+      - name: Full suite x4
         timeout-minutes: 10
-        run: PYTHONPATH=. python -m pytest -q --timeout=120 -p debug_diag
-        continue-on-error: true
-      - name: Diagnostics
-        run: |
-          echo "== ulimit =="; ulimit -a
-          echo "== free =="; free -m
-          echo "== diag log =="; cat /tmp/diag.log 2>/dev/null || echo "(no diag log)"
+        run: python -m pytest -q --timeout=120 -n 4
