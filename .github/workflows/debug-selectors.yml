@@ -20,4 +20,11 @@ jobs:
           pip install pytest pytest-timeout pytest-xdist "python-multipart>=0.0.9"
       - name: Full suite x4
         timeout-minutes: 10
-        run: python -m pytest -q --timeout=120 -n 4
+        run: PYTHONPATH=. python -m pytest -q --timeout=120 -n 4 -p debug_diag
+      - name: Diagnostics
+        if: always()
+        run: |
+          echo "== overcommit =="; cat /proc/sys/vm/overcommit_memory
+          echo "== max_map_count =="; cat /proc/sys/vm/max_map_count
+          echo "== ulimit =="; ulimit -a
+          echo "== diag log =="; cat /tmp/diag.log 2>/dev/null || echo "(no diag log)"
