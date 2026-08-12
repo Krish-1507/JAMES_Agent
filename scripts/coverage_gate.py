@@ -47,9 +47,19 @@ def main() -> int:
         cov_args += ["--cov", module]
     cov_args += ["--cov-report", "json"]
 
+    # The two tail files run in a second, fresh interpreter (see ci.yml):
+    # a long-lived pytest process on the ubuntu runner degrades once ~90% of
+    # the suite has executed, so the last files get their own process. The
+    # coverage data is merged via COVERAGE_FILE + --cov-append.
+    TAIL_FILES = [
+        "tests/test_phase5_server_ui.py",
+        "tests/test_security_guard_isolation.py",
+    ]
+
     with tempfile.TemporaryDirectory() as tmp:
         report = Path(tmp) / "cov.json"
-        cmd = [
+        env = {**os.environ, "COVERAGE_FILE": str(Path(tmp) / ".coverage")}
+        base = [
             sys.executable,
             "-m",
             "pytest",
@@ -59,10 +69,16 @@ def main() -> int:
             "--cov-report",
             f"json:{report}",
         ]
-        proc = subprocess.run(cmd, cwd=REPO_ROOT)
+        main_cmd = base + [f"--ignore={f}" for f in TAIL_FILES]
+        tail_cmd = base + ["--cov-append", *TAIL_FILES]
+        for label, cmd in (("main suite", main_cmd), ("tail files", tail_cmd)):
+            proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env)
+            if proc.returncode != 0:
+                print(f"pytest ({label}) failed", file=sys.stderr)
+                return proc.returncode
         if not report.exists():
             print("coverage report was not produced", file=sys.stderr)
-            return proc.returncode or 1
+            return 1
 
         data = json.loads(report.read_text(encoding="utf-8"))
         totals = data.get("totals", {})

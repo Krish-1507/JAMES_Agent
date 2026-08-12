@@ -38,9 +38,20 @@ jobs:
       - name: Tool registry smoke test
         run: python -c "import james.tools.registry as r; reg=r.ToolRegistry(); assert 'write_file' in reg.names(); print('tools:', len(reg.names()))"
       - name: Run tests
+        if: matrix.os != 'ubuntu-latest'
         # --timeout guards against a stray hang blocking the whole matrix;
         # it also tells us exactly which test is stuck.
         run: python -m pytest -q --timeout=240
+      - name: Run tests (main suite, ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        # The last two files run in a fresh interpreter: a long-lived suite
+        # process on the ubuntu runner degrades (allocation/thread failures)
+        # once ~90% of the suite has executed, so the tail files get their
+        # own process.
+        run: python -m pytest -q --timeout=240 --ignore=tests/test_phase5_server_ui.py --ignore=tests/test_security_guard_isolation.py
+      - name: Run tests (tail files, ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: python -m pytest -q --timeout=240 tests/test_phase5_server_ui.py tests/test_security_guard_isolation.py
 
   coverage:
     name: Coverage gate (security-critical modules)
