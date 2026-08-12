@@ -49,7 +49,12 @@ def _schedule_audio_cleanup(path: str) -> None:
 
 
 def _play_audio(path: str) -> None:
-    """Play an audio file without invoking a command shell."""
+    """Play an audio file without invoking a command shell.
+
+    Every fallback is bounded by a timeout: a missing or unresponsive
+    player (e.g. ``xdg-open`` on a headless box) must never block the
+    assistant.
+    """
     ffplay = shutil.which("ffplay")
     if ffplay:
         try:
@@ -58,9 +63,10 @@ def _play_audio(path: str) -> None:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=True,
+                timeout=15,
             )
             return
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             pass
 
     system = platform.system()
@@ -69,11 +75,17 @@ def _play_audio(path: str) -> None:
     elif system == "Darwin":
         opener = shutil.which("open")
         if opener:
-            subprocess.run([opener, path], check=True)  # nosec B603 - argv list, no shell
+            try:
+                subprocess.run([opener, path], check=True, timeout=15)  # nosec B603 - argv list, no shell
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                pass
     else:
         opener = shutil.which("xdg-open")
         if opener:
-            subprocess.run([opener, path], check=True)  # nosec B603 - argv list, no shell
+            try:
+                subprocess.run([opener, path], check=True, timeout=15)  # nosec B603 - argv list, no shell
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                pass
 
 
 def _play_and_cleanup(path: str) -> None:

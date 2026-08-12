@@ -9,6 +9,7 @@ jobs:
   test:
     name: Python ${{ matrix.python-version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -23,8 +24,11 @@ jobs:
       - name: Install package + dev tools
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install pytest pytest-cov "ruff==0.16.2"
+          # docs extra + python-multipart: the document/office/gateway tests
+          # exercise the file-based document tools and form parsing.
+          pip install -e ".[docs]"
+          pip install "python-multipart>=0.0.9"
+          pip install pytest pytest-cov pytest-timeout "ruff==0.16.2"
       - name: Lint (ruff)
         run: ruff check james tests
       - name: Compile all modules
@@ -34,4 +38,24 @@ jobs:
       - name: Tool registry smoke test
         run: python -c "import james.tools.registry as r; reg=r.ToolRegistry(); assert 'write_file' in reg.names(); print('tools:', len(reg.names()))"
       - name: Run tests
-        run: python -m pytest -q
+        # --timeout guards against a stray hang blocking the whole matrix;
+        # it also tells us exactly which test is stuck.
+        run: python -m pytest -q --timeout=240
+
+  coverage:
+    name: Coverage gate (security-critical modules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package + dev tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[docs]"
+          pip install "python-multipart>=0.0.9"
+          pip install pytest pytest-cov "ruff==0.16.2"
+      - name: Run security-module coverage gate
+        run: python scripts/coverage_gate.py
