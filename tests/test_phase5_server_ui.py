@@ -9,15 +9,86 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
+import requests
 
 from james.ui import server as server_module
 from james.ui.server import EventBus, ServerRuntime, _redact_args, create_app
 
 SECRET = "sk-test-secret-value"
+
+
+class _Server:
+    """Run the FastAPI app on a real port (uvicorn in a daemon thread).
+
+    A real socket client (``requests``) is used instead of starlette's
+    TestClient: TestClient's anyio/asyncio portal has proven to hang on
+    Linux with Python 3.11/3.12 once a full suite has churned threads, and
+    the real-socket path is identical on every platform.
+    """
+
+    def __init__(self, app) -> None:
+        import uvicorn
+
+        config = uvicorn.Config(
+            app, host="127.0.0.1", port=0, log_level="warning", access_log=False
+        )
+        sock = config.bind_socket()
+        self.base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+        self.server = uvicorn.Server(config)
+        self.thread = threading.Thread(
+            target=self.server.run, kwargs={"sockets": [sock]}, daemon=True
+        )
+        self.thread.start()
+        self._wait_ready()
+
+    def _wait_ready(self) -> None:
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            if self.server.started:
+                return
+            time.sleep(0.05)
+        raise RuntimeError("uvicorn server did not start")
+
+    def close(self) -> None:
+        self.server.should_exit = True
+        self.thread.join(timeout=10)
+
+
+class _HTTP:
+    """requests wrapper with a base URL (like starlette's TestClient surface)."""
+
+    def __init__(self, srv: _Server) -> None:
+        self.srv = srv
+
+    def get(self, path: str, **kw):
+        return requests.get(self.srv.base + path, timeout=10, **kw)
+
+    def post(self, path: str, **kw):
+        return requests.post(self.srv.base + path, timeout=10, **kw)
+
+
+def _make_client(app) -> tuple[_HTTP, _Server]:
+    srv = _Server(app)
+    return _HTTP(srv), srv
+
+
+@pytest.fixture
+def runtime() -> ServerRuntime:
+    rt = ServerRuntime(assistant_factory=FakeAssistant)
+    rt._assistant = rt._assistant_factory()  # build without starting the loop thread
+    rt._assistant.on_event = rt._on_event
+    return rt
+
+
+@pytest.fixture
+def client(runtime: ServerRuntime):
+    http, srv = _make_client(create_app(runtime))
+    yield http
+    srv.close()
 
 
 # ---------------------------------------------------------------------------
@@ -81,19 +152,6 @@ class FakeAssistant:
         self.events.append(("voice_only", enabled))
 
 
-@pytest.fixture
-def runtime() -> ServerRuntime:
-    rt = ServerRuntime(assistant_factory=FakeAssistant)
-    rt._assistant = rt._assistant_factory()  # build without starting the loop thread
-    rt._assistant.on_event = rt._on_event
-    return rt
-
-
-@pytest.fixture
-def client(runtime: ServerRuntime) -> TestClient:
-    return TestClient(create_app(runtime))
-
-
 # ---------------------------------------------------------------------------
 # event bus
 # ---------------------------------------------------------------------------
@@ -125,7 +183,7 @@ def test_event_bus_watermarks_and_bounds() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_index_and_static_assets_served(client: TestClient) -> None:
+def test_index_and_static_assets_served(client: _HTTP) -> None:
     index = client.get("/")
     assert index.status_code == 200
     assert "JAMES" in index.text
@@ -141,7 +199,7 @@ def test_index_and_static_assets_served(client: TestClient) -> None:
     assert "EventSource" in js.text
 
 
-def test_static_path_traversal_blocked(client: TestClient) -> None:
+def test_static_path_traversal_blocked(client: _HTTP) -> None:
     for path in (
         "/static/../server.py",
         "/static/..%2F..%2Fjames%2F__init__.py",
@@ -156,7 +214,7 @@ def test_static_path_traversal_blocked(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_status_reports_ready_and_history(runtime: ServerRuntime, client: TestClient) -> None:
+def test_status_reports_ready_and_history(runtime: ServerRuntime, client: _HTTP) -> None:
     runtime.assistant.history = [
         {"role": "user", "content": "hello"},
         {"role": "assistant", "content": "hi there"},
@@ -176,18 +234,22 @@ def test_status_reports_ready_and_history(runtime: ServerRuntime, client: TestCl
 
 def test_status_not_ready_before_assistant_boots() -> None:
     rt = ServerRuntime()
-    resp = TestClient(create_app(rt)).get("/api/status")
-    assert resp.json() == {"ready": False}
+    http, srv = _make_client(create_app(rt))
+    try:
+        resp = http.get("/api/status")
+        assert resp.json() == {"ready": False}
+    finally:
+        srv.close()
 
 
-def test_turn_submits_text(runtime: ServerRuntime, client: TestClient) -> None:
+def test_turn_submits_text(runtime: ServerRuntime, client: _HTTP) -> None:
     resp = client.post("/api/turn", json={"text": "  tell me a joke  "})
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
     assert runtime.assistant.texts == ["tell me a joke"]
 
 
-def test_turn_rejects_empty(runtime: ServerRuntime, client: TestClient) -> None:
+def test_turn_rejects_empty(runtime: ServerRuntime, client: _HTTP) -> None:
     assert client.post("/api/turn", json={"text": "   "}).status_code == 400
     assert client.post("/api/turn", json={}).status_code == 400
 
@@ -197,7 +259,7 @@ def test_turn_rejects_empty(runtime: ServerRuntime, client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_sessions_lifecycle(runtime: ServerRuntime, client: TestClient) -> None:
+def test_sessions_lifecycle(runtime: ServerRuntime, client: _HTTP) -> None:
     got = client.get("/api/sessions").json()
     assert got == {"sessions": ["default"], "current": "default"}
 
@@ -214,7 +276,7 @@ def test_sessions_lifecycle(runtime: ServerRuntime, client: TestClient) -> None:
     assert runtime.assistant.history == []
 
 
-def test_switch_session_rejects_missing_name(client: TestClient) -> None:
+def test_switch_session_rejects_missing_name(client: _HTTP) -> None:
     assert client.post("/api/sessions/switch", json={}).status_code == 400
 
 
@@ -223,7 +285,7 @@ def test_switch_session_rejects_missing_name(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_model_switch_delegates_and_publishes(runtime: ServerRuntime, client: TestClient) -> None:
+def test_model_switch_delegates_and_publishes(runtime: ServerRuntime, client: _HTTP) -> None:
     before = len(runtime.bus.drain(0)[0])
     resp = client.post("/api/model", json={"provider": "openai", "model": "gpt-4o"})
     assert resp.status_code == 200
@@ -236,7 +298,7 @@ def test_model_switch_delegates_and_publishes(runtime: ServerRuntime, client: Te
     }
 
 
-def test_model_switch_requires_fields(client: TestClient) -> None:
+def test_model_switch_requires_fields(client: _HTTP) -> None:
     assert client.post("/api/model", json={"provider": "openai"}).status_code == 400
     assert client.post("/api/model", json={"model": "gpt-4o"}).status_code == 400
 
@@ -246,7 +308,7 @@ def test_model_switch_requires_fields(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_tools_list_marks_dangerous(client: TestClient) -> None:
+def test_tools_list_marks_dangerous(client: _HTTP) -> None:
     data = client.get("/api/tools").json()["tools"]
     by_name = {t["name"]: t for t in data}
     assert by_name["web_search"]["dangerous"] is False
@@ -299,7 +361,7 @@ def restore_settings() -> None:
 
 
 def test_settings_roundtrip(
-    runtime: ServerRuntime, client: TestClient, restore_settings: None
+    runtime: ServerRuntime, client: _HTTP, restore_settings: None
 ) -> None:
     snap = client.get("/api/settings").json()
     assert snap["mode"] in ("standard", "full")
@@ -315,7 +377,7 @@ def test_settings_roundtrip(
     assert resp.json()["dry_run"] is True
 
 
-def test_settings_rejects_bad_values(client: TestClient, restore_settings: None) -> None:
+def test_settings_rejects_bad_values(client: _HTTP, restore_settings: None) -> None:
     resp = client.post("/api/settings", json={"updates": {"mode": "chaotic"}})
     assert resp.status_code == 400
     assert "mode" in resp.json()["detail"]
@@ -333,7 +395,7 @@ def test_settings_rejects_bad_values(client: TestClient, restore_settings: None)
 # ---------------------------------------------------------------------------
 
 
-def test_voice_status_and_controls(runtime: ServerRuntime, client: TestClient) -> None:
+def test_voice_status_and_controls(runtime: ServerRuntime, client: _HTTP) -> None:
     status = client.get("/api/voice").json()
     assert status["state"] == "idle"
     assert status["level"] == 0.0
@@ -367,7 +429,7 @@ def test_redact_args_hides_secrets_and_oversized_values() -> None:
     assert redacted["safe"] == "hi"
 
 
-def test_approval_allow_once_via_http(runtime: ServerRuntime, client: TestClient) -> None:
+def test_approval_allow_once_via_http(runtime: ServerRuntime, client: _HTTP) -> None:
     before = len(runtime.bus.drain(0)[0])
     req = runtime.approvals.request("delete_file", {"path": "/tmp/x"})
     assert not req.resolved
@@ -404,7 +466,7 @@ def test_confirm_defaults_to_deny_without_clients(
 
 
 def test_confirm_allow_once_from_connected_client(
-    runtime: ServerRuntime, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    runtime: ServerRuntime, client: _HTTP, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(server_module, "_APPROVAL_TIMEOUT", 15.0)
     runtime.bus.connect()  # a UI client is watching
@@ -442,7 +504,7 @@ def test_confirm_allow_once_from_connected_client(
 
 
 def test_onboarding_writes_env_and_applies_live(
-    runtime: ServerRuntime, client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    runtime: ServerRuntime, client: _HTTP, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     written: list[dict] = []
 
@@ -477,6 +539,6 @@ def test_onboarding_writes_env_and_applies_live(
     settings.voice.enabled = voice_was_enabled
 
 
-def test_onboarding_requires_provider_and_model(client: TestClient) -> None:
+def test_onboarding_requires_provider_and_model(client: _HTTP) -> None:
     resp = client.post("/api/onboarding", json={"model": "gpt-4o"})
     assert resp.status_code == 400
