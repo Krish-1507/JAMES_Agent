@@ -350,9 +350,12 @@ def word_read_document(path: str) -> ToolResult:
 )
 def powerpoint_create(title: str, slides: str = "[]", save_path: str = "slides.pptx") -> ToolResult:
     try:
-        _guard_office("powerpoint_create")
-        p = resolve_workspace_path(save_path, allow_root=False)
         outline = _as_json(slides, "slides")
+        p = resolve_workspace_path(save_path, allow_root=False)
+        try:
+            _guard_office("powerpoint_create")
+        except Exception as exc:
+            return _powerpoint_pptx_fallback(title, outline, p, reason=str(exc))
         app = _com_dispatch("PowerPoint.Application")
         try:
             presentation = app.Presentations.Add()
@@ -373,3 +376,29 @@ def powerpoint_create(title: str, slides: str = "[]", save_path: str = "slides.p
             app.Quit()
     except Exception as exc:
         return ToolResult(ok=False, output=str(exc))
+
+
+def _powerpoint_pptx_fallback(title: str, outline: list, p: Path, reason: str) -> ToolResult:
+    """Build the deck with python-pptx when COM/Office is unavailable."""
+    try:
+        from pptx import Presentation
+    except ImportError:
+        return ToolResult(
+            ok=False,
+            output=(
+                f"{reason} Install the [docs] extra (python-pptx) for a "
+                "portable .pptx fallback that works on every platform."
+            ),
+        )
+    prs = Presentation()
+    cover = prs.slides.add_slide(prs.slide_layouts[0])
+    cover.shapes.title.text = title
+    for item in outline:
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = str(item.get("title", ""))
+        body = slide.placeholders[1].text_frame
+        for i, b in enumerate([str(b) for b in (item.get("bullets") or [])]):
+            para = body.paragraphs[0] if i == 0 else body.add_paragraph()
+            para.text = f"• {b}"
+    prs.save(str(p))
+    return ToolResult(ok=True, output=f"Presentation saved to {p} (python-pptx fallback).")

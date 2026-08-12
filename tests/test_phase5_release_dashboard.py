@@ -53,8 +53,8 @@ class _Server:
         self.thread.join(timeout=5)
 
 
-@pytest.fixture
-def server(isolated_workspace: Path) -> _Server:
+@pytest.fixture(scope="module")
+def server() -> _Server:
     srv = _Server()
     yield srv
     srv.close()

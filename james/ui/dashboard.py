@@ -61,9 +61,13 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        # Always drain the request body up front: leaving bytes unread in the
+        # socket buffer makes close() abortive (RST instead of FIN), which
+        # surfaces as ConnectionResetError on macOS and WinError 10053 on
+        # Windows for otherwise-successful responses.
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length else b""
         if self.path == "/api/mcp/toggle":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
             try:
                 data = json.loads(body)
                 result = self._handle_mcp_toggle(data)
@@ -71,8 +75,6 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json({"ok": False, "error": str(exc)}, 400)
         elif self.path == "/api/permissions":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
             try:
                 data = json.loads(body)
                 self._handle_permission_update(data)
@@ -86,8 +88,6 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json({"ok": False, "error": str(exc)}, 400)
         elif self.path == "/api/export/download":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
             try:
                 data = json.loads(body)
                 self._handle_export_download(data)
