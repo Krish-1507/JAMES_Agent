@@ -259,8 +259,35 @@ def test_cli_eval_smoke_exit_zero() -> None:
 
 
 def test_cli_update_check_exit_zero_when_current() -> None:
-    proc = _run_cli("--update-check")
-    assert proc.returncode == 0
+    # Hermetic: point the updater at a local fake release feed instead of the
+    # live GitHub API (shared runner IPs hit the anonymous rate limit).
+    import http.server
+    import threading
+
+    release = json.dumps({"tag_name": f"v{__version__}", "html_url": "https://example.invalid/release"})
+
+    class _FakeReleases(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(release.encode())
+
+        def log_message(self, *args) -> None:  # silence request logging
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _FakeReleases)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        proc = _run_cli(
+            "--update-check",
+            env_extra={"UPDATE_URL": f"http://127.0.0.1:{server.server_port}/releases/latest"},
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 def test_cli_unknown_eval_suite_exit_two() -> None:
