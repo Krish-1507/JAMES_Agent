@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "james-assistant"
-version = "0.5.0"
-description = "JAMES is an alpha-stage, desktop-first LLM assistant with explicit safety boundaries."
+version = "1.0.0"
+description = "JAMES is a desktop-first LLM assistant with explicit safety boundaries."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "JAMES Contributors" }]
 keywords = ["assistant", "voice", "agent", "llm", "automation", "ai"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.10",

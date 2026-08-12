@@ -240,6 +240,110 @@ def _dependency_name(spec: str) -> str:
     return spec
 
 
+# Bundled generated-skill code for the built-in catalog entries. Every bundle
+# is straight-line, pure-function code that passes the Skill Forge AST gate
+# (no imports beyond james.tools.base, no attributes/loops/dynamic calls).
+# At install time each bundle is signed with the local workspace key through
+# the same path used by `publish_skill`, so installs stay signature-checked.
+_BUNDLED_SKILLS: dict[str, str] = {
+    "file-organizer": (
+        "# JAMES-GENERATED-SKILL v1\n"
+        "from james.tools.base import tool, ToolResult\n"
+        "\n"
+        "@tool(\n"
+        '    "organize_file_plan",\n'
+        '    "Suggest a destination folder for a file name based on its extension.",\n'
+        '    {"file_name": {"type": "string", "description": "The file name to classify."}},\n'
+        '    required=["file_name"],\n'
+        ")\n"
+        "def organize_file_plan(file_name: str) -> ToolResult:\n"
+        '    folder = "Documents"\n'
+        '    if ".mp3" in file_name or ".wav" in file_name or ".flac" in file_name:\n'
+        '        folder = "Music"\n'
+        '    elif ".jpg" in file_name or ".png" in file_name or ".gif" in file_name:\n'
+        '        folder = "Pictures"\n'
+        '    elif ".pdf" in file_name or ".docx" in file_name or ".xlsx" in file_name:\n'
+        '        folder = "Documents"\n'
+        '    elif ".zip" in file_name or ".tar" in file_name:\n'
+        '        folder = "Archives"\n'
+        "    else:\n"
+        '        folder = "Other"\n'
+        '    return ToolResult(ok=True, output="Move \'" + file_name + "\' to " + folder + ".")\n'
+    ),
+    "web-scraper": (
+        "# JAMES-GENERATED-SKILL v1\n"
+        "from james.tools.base import tool, ToolResult\n"
+        "\n"
+        "@tool(\n"
+        '    "web_url_analysis",\n'
+        '    "Report whether a URL is an HTTPS link and strip common tracking markers.",\n'
+        '    {"url": {"type": "string", "description": "The URL to analyze."}},\n'
+        '    required=["url"],\n'
+        ")\n"
+        "def web_url_analysis(url: str) -> ToolResult:\n"
+        '    secure = "https://" in url\n'
+        '    note = "secure"\n'
+        "    if not secure:\n"
+        '        note = "not https"\n'
+        "    return ToolResult(\n"
+        '        ok=True, output="URL is " + note + ": " + url\n'
+        "    )\n"
+    ),
+    "email-sender": (
+        "# JAMES-GENERATED-SKILL v1\n"
+        "from james.tools.base import tool, ToolResult\n"
+        "\n"
+        "@tool(\n"
+        '    "compose_email_draft",\n'
+        '    "Compose a plain-text email draft from a subject and body.",\n'
+        "    {\n"
+        '        "subject": {"type": "string", "description": "The email subject."},\n'
+        '        "body": {"type": "string", "description": "The email body."},\n'
+        "    },\n"
+        '    required=["subject", "body"],\n'
+        ")\n"
+        "def compose_email_draft(subject: str, body: str) -> ToolResult:\n"
+        '    draft = "Subject: " + subject + "\\n\\n" + body\n'
+        "    return ToolResult(ok=True, output=draft)\n"
+    ),
+    "calendar-sync": (
+        "# JAMES-GENERATED-SKILL v1\n"
+        "from james.tools.base import tool, ToolResult\n"
+        "\n"
+        "@tool(\n"
+        '    "format_calendar_event",\n'
+        '    "Format a calendar event line from a date and time string.",\n'
+        "    {\n"
+        '        "date": {"type": "string", "description": "Event date (e.g. 2026-08-11)."},\n'
+        '        "time": {"type": "string", "description": "Event time (e.g. 09:30)."},\n'
+        '        "title": {"type": "string", "description": "Event title."},\n'
+        "    },\n"
+        '    required=["date", "time", "title"],\n'
+        ")\n"
+        "def format_calendar_event(date: str, time: str, title: str) -> ToolResult:\n"
+        '    line = date + " at " + time + ": " + title\n'
+        "    return ToolResult(ok=True, output=line)\n"
+    ),
+    "note-taker": (
+        "# JAMES-GENERATED-SKILL v1\n"
+        "from james.tools.base import tool, ToolResult\n"
+        "\n"
+        "@tool(\n"
+        '    "format_structured_note",\n'
+        '    "Format a note with a title and body, numbered for readability.",\n'
+        "    {\n"
+        '        "title": {"type": "string", "description": "Note title."},\n'
+        '        "body": {"type": "string", "description": "Note body."},\n'
+        "    },\n"
+        '    required=["title", "body"],\n'
+        ")\n"
+        "def format_structured_note(title: str, body: str) -> ToolResult:\n"
+        '    note = "# " + title + "\\n\\n" + body\n'
+        "    return ToolResult(ok=True, output=note)\n"
+    ),
+}
+
+
 def _resolve_dependencies(
     name: str, catalog: list[dict[str, Any]]
 ) -> tuple[list[dict[str, Any]], str]:
@@ -344,10 +448,17 @@ def _install_plugin(name: str) -> dict[str, Any]:
         plugin_name = str(plugin.get("name"))
         code = plugin.get("code")
         if not code:
-            return {
-                "ok": False,
-                "error": f"Plugin '{plugin_name}' has no bundled code and cannot be installed.",
-            }
+            template = _BUNDLED_SKILLS.get(plugin_name)
+            if not template:
+                return {
+                    "ok": False,
+                    "error": f"Plugin '{plugin_name}' has no bundled code and cannot be installed.",
+                }
+            # Bundle the built-in generated skill and sign it with the local
+            # workspace key (the same enrollment `publish_skill` uses), so the
+            # install still flows through Ed25519 verification below.
+            code = _sign_local_plugin(template, plugin_name, str(plugin.get("description", "")))
+            trust = _trusted_plugin_keys()  # signing enrolled the local key
         verified, reason = verify_plugin_signature(str(code), trust)
         if not verified:
             return {"ok": False, "error": f"Plugin '{plugin_name}' rejected: {reason}"}

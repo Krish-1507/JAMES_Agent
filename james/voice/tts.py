@@ -75,17 +75,13 @@ def _play_audio(path: str) -> None:
     elif system == "Darwin":
         opener = shutil.which("open")
         if opener:
-            try:
+            with suppress((OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired)):
                 subprocess.run([opener, path], check=True, timeout=15)  # nosec B603 - argv list, no shell
-            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                pass
     else:
         opener = shutil.which("xdg-open")
         if opener:
-            try:
+            with suppress((OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired)):
                 subprocess.run([opener, path], check=True, timeout=15)  # nosec B603 - argv list, no shell
-            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                pass
 
 
 def _play_and_cleanup(path: str) -> None:

@@ -66,8 +66,8 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             body = self.rfile.read(content_length)
             try:
                 data = json.loads(body)
-                self._handle_mcp_toggle(data)
-                self._send_json({"ok": True})
+                result = self._handle_mcp_toggle(data)
+                self._send_json(result)
             except Exception as exc:
                 self._send_json({"ok": False, "error": str(exc)}, 400)
         elif self.path == "/api/permissions":
@@ -76,6 +76,12 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(body)
                 self._handle_permission_update(data)
+                self._send_json({"ok": True})
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, 400)
+        elif self.path.startswith("/api/tools/"):
+            try:
+                self._handle_tool_toggle(self.path.split("/")[-1])
                 self._send_json({"ok": True})
             except Exception as exc:
                 self._send_json({"ok": False, "error": str(exc)}, 400)
@@ -186,19 +192,50 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                     continue
         return {"memories": memories[-50:]}
 
-    def _handle_mcp_toggle(self, data: dict) -> None:
-        action = data.get("action")
-        server_name = data.get("name")
-        if action == "enable" and server_name:
-            from ..tools.mcp_tools import load_mcp_configs
+    def _handle_tool_toggle(self, tool_name: str) -> None:
+        """Toggle a tool between allowed and unlisted (the dashboard's Toggle button)."""
+        if not tool_name:
+            return
+        from ..tools.registry import ALL_TOOLS
 
-            configs = load_mcp_configs()
-            for cfg in configs:
-                if cfg.name == server_name:
-                    logger.info("MCP server '%s' is configured and ready", server_name)
-                    return
-        elif action == "disable" and server_name:
-            logger.info("MCP server '%s' toggle requested", server_name)
+        known = {t.name for t in ALL_TOOLS}
+        if tool_name not in known:
+            raise ValueError(f"Unknown tool: {tool_name}")
+        if tool_name in settings.assistant.allowed_tools:
+            settings.assistant.allowed_tools.remove(tool_name)
+        else:
+            settings.assistant.allowed_tools.append(tool_name)
+        if tool_name in settings.assistant.denied_tools:
+            settings.assistant.denied_tools.remove(tool_name)
+
+    def _handle_mcp_toggle(self, data: dict) -> dict:
+        action = data.get("action", "toggle")
+        server_name = data.get("name")
+        if not server_name:
+            raise ValueError("Missing MCP server name")
+        from ..integrations.catalog import MCP_CATALOG
+        from ..integrations.manager import IntegrationManager
+
+        catalog_names = {str(e["name"]) for e in MCP_CATALOG}
+        if action == "enable":
+            ok, message = IntegrationManager().enable(server_name)
+        elif action == "disable":
+            ok, message = IntegrationManager().disable(server_name)
+        elif action == "toggle":
+            manager = IntegrationManager()
+            if server_name in catalog_names:
+                enabled = server_name in manager._enabled_names()
+                ok, message = (manager.disable if enabled else manager.enable)(server_name)
+            else:
+                return {
+                    "ok": False,
+                    "error": f"'{server_name}' is user-defined; edit mcp.json directly.",
+                }
+        else:
+            raise ValueError(f"Unknown action: {action}")
+        if not ok:
+            return {"ok": False, "error": message}
+        return {"ok": True, "message": message}
 
     def _handle_permission_update(self, data: dict) -> None:
         action = data.get("action")

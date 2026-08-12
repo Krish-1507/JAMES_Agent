@@ -129,6 +129,8 @@ class Evaluator:
             "failed": total - passed,
             "pass_rate": round(passed / total, 2) if total > 0 else 0.0,
             "avg_duration": round(sum(r.duration_seconds for r in self._results) / total, 2),
+            "avg_tool_calls": round(sum(r.tool_calls for r in self._results) / total, 2),
+            "avg_iterations": round(sum(r.iterations for r in self._results) / total, 2),
         }
 
 

@@ -66,9 +66,13 @@ def main() -> int:
 
         data = json.loads(report.read_text(encoding="utf-8"))
         totals = data.get("totals", {})
+        files = {k.replace("\\", "/"): v for k, v in data.get("files", {}).items()}
         failed: list[tuple[str, float, float]] = []
         for module in modules:
-            entry = data.get("files", {}).get(f"{module}.py")
+            entry = files.get(f"{module}.py")
+            if entry is None:
+                rel = "/".join(module.split(".")) + ".py"
+                entry = files.get(rel)
             if entry is None:
                 print(f"no coverage data for {module}", file=sys.stderr)
                 failed.append((module, 0.0, threshold))
@@ -80,7 +84,7 @@ def main() -> int:
 
         print(f"\noverall coverage: {totals.get('percent_covered', 0):.1f}%")
         if failed:
-            print("\nFAILED coverage gate (need >= {:.0f}%):".format(threshold))
+            print(f"\nFAILED coverage gate (need >= {threshold:.0f}%):")
             for module, percent, need in failed:
                 print(f"  {module}: {percent:.1f}% < {need:.0f}%")
             return 1

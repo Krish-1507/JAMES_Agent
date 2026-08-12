@@ -32,6 +32,7 @@ def plugin_dir(isolated_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> Pat
     from james.tools import forge_tools
 
     directory = isolated_workspace / "plugins"
+    directory.mkdir(exist_ok=True)
     monkeypatch.setattr(forge_tools, "_PLUGINS_DIR", directory)
     return directory
 

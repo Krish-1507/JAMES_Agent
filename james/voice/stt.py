@@ -49,7 +49,7 @@ class WhisperApiSTT(STTProvider):
         self.mic_index = mic_index
 
     def listen(self) -> str:
-        audio = self._record()
+        audio = _record(self.mic_index)
         if not audio:
             return ""
         path = None
@@ -78,7 +78,7 @@ class WhisperLocalSTT(STTProvider):
         self.mic_index = mic_index
 
     def listen(self) -> str:
-        audio = self._record()
+        audio = _record(self.mic_index)
         if not audio:
             return ""
         path = None

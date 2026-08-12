@@ -54,7 +54,7 @@ _confirm_thread: threading.Thread | None = None
 
 
 def request_confirmation(name: str, arguments: dict) -> bool:
-    """Non-blocking confirmation request. In GUI mode, the orb UI handles this.
+    """Non-blocking confirmation request. The desktop/web UI handles this.
 
     Returns True if confirmed, False if denied or timed out.
     """

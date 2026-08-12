@@ -1,4 +1,15 @@
-name: Signed release artifacts
+name: Release v1.0
+
+# Runs on version tags (v1.0.0). Builds platform installers on native
+# runners, signs everything (sigstore OIDC + optional code signing), attaches
+# the artifacts to the GitHub release, and publishes the wheel to PyPI.
+#
+# Optional signing secrets (skip to get unsigned but sigstore-verified builds):
+#   PYPI_TOKEN              - PyPI API token for `pip install james-assistant`
+#   WIN_CERTIFICATE_BASE64  - pfx/p12 for Authenticode signing
+#   WIN_CERTIFICATE_PASSWORD
+#   MAC_CERTIFICATE_BASE64 / MAC_CERTIFICATE_PASSWORD / MAC_SIGNING_IDENTITY
+#   APPLE_ID / APPLE_TEAM_ID / APPLE_APP_PASSWORD
 
 on:
   push:
@@ -9,8 +20,119 @@ permissions:
   id-token: write
 
 jobs:
-  build-sign-publish:
+  build-windows:
+    runs-on: windows-latest
+    # secrets is not available in `if:` conditions; expose the cert check via
+    # a job-level env var so the signing steps can skip cleanly when absent.
+    env:
+      WIN_CERT: ${{ secrets.WIN_CERTIFICATE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          choco install innosetup -y
+      - name: Build JAMES.exe
+        run: pyinstaller james.spec --noconfirm --clean
+      - name: Sign installer (optional)
+        if: ${{ env.WIN_CERT != '' }}
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File packaging/windows/sign.ps1
+        env:
+          WIN_CERTIFICATE_BASE64: ${{ secrets.WIN_CERTIFICATE_BASE64 }}
+          WIN_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+      - name: Build Inno Setup installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\windows\james_installer.iss
+      - name: Sign installer (optional, after Inno)
+        if: ${{ env.WIN_CERT != '' }}
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File packaging/windows/sign.ps1 -Artifacts "dist/JAMES-Setup-*.exe"
+        env:
+          WIN_CERTIFICATE_BASE64: ${{ secrets.WIN_CERTIFICATE_BASE64 }}
+          WIN_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+      - name: Sigstore sign
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: dist/*.exe
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            dist/JAMES-Setup-*.exe
+            dist/*.sigstore
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+      - name: Build JAMES.app
+        run: pyinstaller james.spec --noconfirm --clean
+      - name: Build signed DMG
+        run: bash packaging/macos/build_dmg.sh ${GITHUB_REF_NAME#v}
+        env:
+          MAC_CERTIFICATE_BASE64: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          MAC_SIGNING_IDENTITY: ${{ secrets.MAC_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      - name: Sigstore sign
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: dist/*.dmg
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: |
+            dist/JAMES-*.dmg
+            dist/*.sigstore
+
+  build-linux:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+      - name: Build JAMES binary
+        run: pyinstaller james.spec --noconfirm --clean
+      - name: Build AppImage
+        run: bash packaging/linux/build_appimage.sh ${GITHUB_REF_NAME#v}
+      - name: Sigstore sign
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: dist/*.AppImage
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: |
+            dist/JAMES-*.AppImage
+            dist/*.sigstore
+
+  publish-pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,12 +142,25 @@ jobs:
         run: |
           python -m pip install --upgrade build
           python -m build
-      - name: Sign artifacts with GitHub OIDC
+      - name: Sign sdist/wheel with Sigstore
         uses: sigstore/gh-action-sigstore-python@v3.0.0
         with:
           inputs: ./dist/*
-      - name: Publish release assets and signatures
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+
+  release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+      - name: Create GitHub release with artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*
+          files: release-artifacts/*
+          generate_release_notes: true

@@ -23,6 +23,11 @@ jobs:
     name: GAIA validation subset
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # secrets is not available in `if:` conditions, so surface the API key
+    # through a job-level env var: an absent key leaves it empty and the
+    # GAIA steps skip (only the offline smoke suite runs).
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -36,9 +41,8 @@ jobs:
       - name: Offline eval smoke test (no API key)
         run: python -m james --eval smoke
       - name: GAIA validation run
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        if: ${{ env.OPENAI_API_KEY != '' }}
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LLM_PROVIDER: openai
         run: python -m james --eval gaia --download-gaia --eval-limit ${{ inputs.limit || 10 }}
       - name: Upload eval reports
@@ -49,7 +53,7 @@ jobs:
           path: workspace/evaluations/
           if-no-files-found: ignore
       - name: Publish results to docs/BENCHMARKS.md
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        if: ${{ env.OPENAI_API_KEY != '' }}
         env:
           LLM_PROVIDER: openai
           LLM_MODEL: ${{ vars.EVAL_MODEL || 'gpt-4o-mini' }}
@@ -58,7 +62,7 @@ jobs:
           REPORT=$(ls workspace/evaluations/gaia_report_*.json | tail -1)
           python scripts/publish_benchmarks.py "$REPORT"
       - name: Commit published results
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        if: ${{ env.OPENAI_API_KEY != '' }}
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: publish nightly GAIA result"

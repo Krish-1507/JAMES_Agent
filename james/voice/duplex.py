@@ -20,7 +20,7 @@ Text stays first-class: :meth:`DuplexController.send_text` injects a typed
 turn into the live session at any moment (even while idle it wakes it first).
 
 The controller emits JAMES events through the assistant (``on_event``) so the
-orb GUI and CLI show listening / transcribing / speaking states live.
+web UI and CLI show listening / transcribing / speaking states live.
 """
 
 from __future__ import annotations

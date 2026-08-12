@@ -1,19 +1,22 @@
 # PyInstaller spec for building a standalone JAMES executable (no Python required).
-# Usage:  pyinstaller james.spec
+# Usage:  pyinstaller james.spec --noconfirm
+import sys
+
 block_cipher = None
 
 a = Analysis(
-    ["james/__main__.py"],
+    ["packaging/entry.py"],
     pathex=["."],
     binaries=[],
     datas=[
-        ("james/tools/marketplace", "james/tools/marketplace"),
         ("james/ui/web", "james/ui/web"),
         (".env.example", "."),
     ],
     hiddenimports=[
         "james.config",
+        "james.updater",
         "james.evaluation",
+        "james.evaluation.worker",
         "james.llm.base",
         "james.llm.factory",
         "james.llm.providers",
@@ -23,9 +26,21 @@ a = Analysis(
         "james.core.computeruse",
         "james.core.doctor",
         "james.core.guard",
+        "james.core.isolation",
         "james.core.personality",
+        "james.core.recipes",
         "james.core.scheduler",
         "james.core.secrets",
+        "james.gateway",
+        "james.gateway.base",
+        "james.gateway.discord",
+        "james.gateway.manager",
+        "james.gateway.slack",
+        "james.gateway.telegram",
+        "james.gateway.whatsapp",
+        "james.integrations",
+        "james.integrations.catalog",
+        "james.integrations.manager",
         "james.ui.dashboard",
         "james.ui.server",
         "james.ui.shell",
@@ -35,15 +50,20 @@ a = Analysis(
         "james.tools.registry",
         "james.tools.background_tools",
         "james.tools.browser_tools",
+        "james.tools.compute_tools",
         "james.tools.delegate_tool",
         "james.tools.desktop_tools",
         "james.tools.document_tools",
         "james.tools.file_manager_tools",
         "james.tools.file_tools",
         "james.tools.forge_tools",
+        "james.tools.gateway_tools",
         "james.tools.marketplace",
         "james.tools.mcp_tools",
         "james.tools.memory_tools",
+        "james.tools.office_tools",
+        "james.tools.plugin_proxy",
+        "james.tools.recipes_tools",
         "james.tools.research_tools",
         "james.tools.scheduler_tools",
         "james.tools.system_tools",
@@ -52,6 +72,8 @@ a = Analysis(
         "requests",
         "urllib3",
         "dotenv",
+        "uvicorn",
+        "fastapi",
     ],
     cipher=block_cipher,
 )
@@ -70,4 +92,21 @@ exe = EXE(
     strip=False,
     upx=True,
     console=True,
+    version="packaging/windows/version_info.txt",
 )
+
+# macOS: wrap the executable in a proper .app bundle (no-op elsewhere).
+if sys.platform == "darwin":
+    app = BUNDLE(
+        exe,
+        name="JAMES.app",
+        icon=None,
+        bundle_identifier="ai.james.assistant",
+        version="1.0.0",
+        info_plist={
+            "NSHighResolutionCapable": True,
+            "LSMinimumSystemVersion": "11.0",
+            "NSMicrophoneUsageDescription": "JAMES listens for voice input.",
+            "NSSpeechRecognitionUsageDescription": "JAMES transcribes voice input.",
+        },
+    )

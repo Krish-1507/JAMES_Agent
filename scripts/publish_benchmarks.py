@@ -64,11 +64,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Drop the "(no runs yet)" placeholder and any rows for the same dates,
     # then insert the new rows right after the table header.
-    kept = [
-        line
-        for line in text.splitlines()
-        if not _ROWS_RE.match(line)
-    ]
+    kept = [line for line in text.splitlines() if not _ROWS_RE.match(line)]
     header_at = next(
         i for i, line in enumerate(kept) if line.startswith("| Date | Provider / model |")
     )

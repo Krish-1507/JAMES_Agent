@@ -56,6 +56,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[docs]"
           pip install "python-multipart>=0.0.9"
-          pip install pytest pytest-cov "ruff==0.16.2"
+          pip install pytest pytest-cov pytest-timeout "ruff==0.16.2"
       - name: Run security-module coverage gate
         run: python scripts/coverage_gate.py

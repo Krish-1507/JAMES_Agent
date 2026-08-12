@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=JAMES
+Comment=Just A Modular Executive System — desktop LLM assistant
+Exec=JAMES
+Icon=james
+Terminal=false
+Type=Application
+Categories=Utility;Office;Network;
+StartupWMClass=JAMES

@@ -134,7 +134,7 @@ def _guarded_httpx_send(self, request, **kwargs):
     return _orig_httpx_send(self, request, **kwargs)
 
 
-def _guarded_http_client_request(self, url, **kwargs):
+def _guarded_http_client_request(self, method, url, body=None, headers=None, **kwargs):
     from urllib.parse import urlparse
 
     parsed = urlparse(str(url))
@@ -142,7 +142,7 @@ def _guarded_http_client_request(self, url, **kwargs):
     if host and not _is_loopback(host):
         _audit(host, parsed.port or 80, False)
         raise BlockedEgress(f"Blocked egress to {host} (offline mode, http.client)")
-    return _orig_http_client_request(self, url, **kwargs)
+    return _orig_http_client_request(self, method, url, body, headers, **kwargs)
 
 
 def _guarded_urllib_request(url, **kwargs):

@@ -1,0 +1,13 @@
+[
+  {
+    "name": "filesystem",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-filesystem",
+      "C:\\Users\\krish_b9e9r0w\\AppData\\Local\\Temp\\pytest-of-krish_b9e9r0w\\pytest-156\\test_dashboard_mcp_toggle_flip0"
+    ],
+    "env": {}
+  }
+]

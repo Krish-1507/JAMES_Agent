@@ -118,6 +118,9 @@ def _run_gaia_eval(args) -> int:
     for level, stats in sorted(report["by_level"].items()):
         print(f"    Level {level}: {stats['passed']}/{stats['total']} ({stats['pass_rate']:.1%})")
     print(json.dumps(report, indent=2))
+    if report["total"] > 0 and report["passed"] == 0:
+        print("[!] Eval failed: zero tasks passed.")
+        return 1
     return 0
 
 
@@ -190,6 +193,16 @@ def main(argv: list[str] | None = None) -> int:
         "--offline",
         action="store_true",
         help="Privacy mode: block ALL non-local network egress (audited).",
+    )
+    parser.add_argument(
+        "--update-check",
+        action="store_true",
+        help="Check GitHub for a newer release and exit (0 up-to-date, 1 update available, 2 error).",
+    )
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Apply the latest release (pip upgrade, or print the installer download URL).",
     )
     parser.add_argument(
         "--gateway",
@@ -285,9 +298,27 @@ def main(argv: list[str] | None = None) -> int:
             summary = evaluator.summary()
             summary["results"] = [asdict(r) for r in results]
             print(json.dumps(summary, indent=2))
+            if summary["failed"]:
+                print(f"[!] Smoke suite failed: {summary['failed']}/{summary['total']} tasks.")
+                return 1
             return 0
         print(f"[!] Unknown suite: {args.eval}. Available suites: gaia, smoke")
         return 2
+
+    if args.update_check or args.update:
+        from .updater import apply_update, check_for_updates
+
+        result = apply_update() if args.update else check_for_updates()
+        if not result.get("ok"):
+            print(f"[!] {result.get('error', 'update check failed')}")
+            return 2
+        if result.get("up_to_date"):
+            print(f"[+] JAMES is up to date (v{__version__}).")
+            return 0
+        print(f"[+] JAMES {result.get('latest_version')} is available (you have v{__version__}).")
+        print(f"    {result.get('message', '')}")
+        print(f"    Release notes: {result.get('release_url', '')}")
+        return 1
 
     # Desktop app is the default experience. --ui forces it; if PyQt5 is not
     # installed we fall back to the text CLI with a helpful hint. Other explicit
@@ -301,6 +332,8 @@ def main(argv: list[str] | None = None) -> int:
         or args.session
         or args.offline
         or args.gateway
+        or args.update_check
+        or args.update
     )
     if want_desktop and _ui_available():
         return _launch_desktop(port=args.port)

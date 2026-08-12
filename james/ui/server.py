@@ -28,6 +28,9 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
+from .. import __version__
+from ..config import settings
+
 log = logging.getLogger("james")
 
 _APPROVAL_TIMEOUT = 300.0  # seconds a request can stay open
@@ -222,8 +225,6 @@ class ServerRuntime:
         self._stdout, self._stderr = _ConsoleSink(log), _ConsoleSink(log)
         sys_set_stdout_stderr(self._stdout, self._stderr)
         try:
-            from ..config import settings
-
             voice_on = settings.voice.enabled and settings.voice.stt_provider != "none"
             if voice_on:
                 # Duplex routes typed text itself; turn-based voice loops drain
@@ -369,7 +370,6 @@ def _load_web_asset(name: str) -> bytes:
 
 
 def _status(runtime: ServerRuntime, assistant: Any) -> dict:
-    from ..config import settings
     from ..llm.catalog import PROVIDERS, default_model, model_choices
 
     history = []
@@ -393,7 +393,7 @@ def _status(runtime: ServerRuntime, assistant: Any) -> dict:
             for p in PROVIDERS
         ],
         "name": settings.assistant.name,
-        "version": "0.5.0",
+        "version": __version__,
     }
 
 
