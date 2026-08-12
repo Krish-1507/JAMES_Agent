@@ -81,6 +81,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now adapts to the installed rich version.
 - **Silent agent failures** — when an agent turn raises, an `error` event is
   now published so UIs surface a toast instead of hanging silently.
+- **Offline egress guard wrappers** — `_guarded_requests_request`,
+  `_guarded_urllib3_request` and `_guarded_httpx_request` did not match the
+  signatures of the methods they patch (`requests.Session.request`,
+  `urllib3.PoolManager.request`, `httpx.Client.send`): allowed loopback calls
+  crashed with a `TypeError`, and sync `httpx.Client` egress could bypass the
+  guard entirely. The wrappers now mirror the patched call signatures.
+- **PowerPoint without Office** — `powerpoint_create` now falls back to
+  python-pptx when the COM/pywin32 path is unavailable (non-Windows hosts or
+  no installed Office), instead of erroring.
+- **Dashboard server flake** — the HTTP handler now drains POST request bodies
+  before responding; unread bodies caused abortive TCP closes
+  (`ConnectionResetError`) in clients.
+- **CI stability** — a long-lived pytest process on the ubuntu runner degraded
+  after roughly 90% of the suite had executed (allocation/thread failures).
+  The two tail test files now run in a fresh interpreter, and the coverage
+  gate splits the suite and merges coverage with `--cov-append`. Also fixed
+  the eval/release workflows, which used the `secrets` context in `if:`
+  conditions (invalid in GitHub Actions); signing steps now gate on a
+  job-level `env` variable.
 
 ## [0.4.0] - 2026-08-10
 
