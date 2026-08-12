@@ -6,34 +6,40 @@ import os
 
 import pytest
 
+_LOG = "/tmp/diag.log"
+_PREV = {}
 
-def _rss_kb() -> int:
+
+def _line() -> str:
+    rss = -1
+    threads = -1
     with open("/proc/self/status") as fh:
-        for line in fh:
-            if line.startswith("VmRSS:"):
-                return int(line.split()[1])
-    return -1
+        for ln in fh:
+            if ln.startswith("VmRSS:"):
+                rss = int(ln.split()[1])
+            elif ln.startswith("Threads:"):
+                threads = int(ln.split()[1])
+    return f"RSS={rss}KB threads={threads} fds={len(os.listdir('/proc/self/fd'))}"
 
 
-def _fds() -> int:
-    return len(os.listdir("/proc/self/fd"))
+def _maps() -> int:
+    with open("/proc/self/maps") as fh:
+        return sum(1 for _ in fh)
 
 
-def _vmaps() -> int:
-    return sum(1 for _ in open("/proc/self/maps"))
-
-
-_AT = {25, 50, 75, 100, 150, 200, 250, 300, 330, 350, 360, 370}
+def _log(msg: str) -> None:
+    with open(_LOG, "a", encoding="utf-8") as fh:
+        fh.write(msg + "\n")
 
 
 def pytest_runtest_protocol(item: "pytest.Item", nextitem: "pytest.Item | None") -> None:
     nodeid = item.nodeid
-    if "test_phase5_server_ui" in nodeid and nodeid not in _AT:
-        return
-    _AT.discard(nodeid)
-    if nodeid not in _AT and "server_ui" not in nodeid:
-        return
-    print(
-        f"[DIAG] {nodeid} RSS={_rss_kb()}KB fds={_fds()} maps={_vmaps()}",
-        flush=True,
-    )
+    key = _line()
+    if key in _PREV:
+        _PREV.pop(key)
+    _PREV[nodeid] = key
+    if len(_PREV) >= 25:
+        _PREV.clear()
+        _log(f"[DIAG25] {nodeid} {_line()} maps={_maps()}")
+    if "test_phase5_server_ui" in nodeid:
+        _log(f"[DIAGSERVER] {nodeid} {_line()} maps={_maps()}")

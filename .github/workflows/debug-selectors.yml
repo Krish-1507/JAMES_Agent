@@ -26,5 +26,4 @@ jobs:
         run: |
           echo "== ulimit =="; ulimit -a
           echo "== free =="; free -m
-          echo "== max_map_count =="; sysctl vm.max_map_count 2>/dev/null || true
-          echo "== last pytest tmp =="; ls -la /tmp 2>/dev/null | head -5
+          echo "== diag log =="; cat /tmp/diag.log 2>/dev/null || echo "(no diag log)"
