@@ -18,15 +18,6 @@ jobs:
         run: |
           python -m pip install -e ".[docs]"
           pip install pytest pytest-timeout pytest-xdist "python-multipart>=0.0.9"
-      - name: Full suite x4
+      - name: Full suite x2
         timeout-minutes: 10
-        run: PYTHONPATH=. python -m pytest -q --timeout=120 -n 4 -p debug_diag
-      - name: Diagnostics
-        if: always()
-        run: |
-          echo "== cgroup =="; cat /sys/fs/cgroup/memory.max 2>/dev/null; cat /sys/fs/cgroup/memory.current 2>/dev/null; cat /sys/fs/cgroup/memory.high 2>/dev/null
-          echo "== overcommit =="; cat /proc/sys/vm/overcommit_memory
-          echo "== max_map_count =="; cat /proc/sys/vm/max_map_count
-          echo "== ulimit =="; ulimit -a
-          echo "== free =="; free -m
-          echo "== diag log =="; cat /tmp/diag.log 2>/dev/null || echo "(no diag log)"
+        run: python -m pytest -q --timeout=120 -n 2
