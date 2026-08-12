@@ -45,5 +45,5 @@ def pytest_runtest_protocol(item: "pytest.Item", nextitem: "pytest.Item | None")
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
-    if report.failed or report.error:
+    if report.failed:
         _log(f"[DIAGFAIL] {report.nodeid} {_metrics()} maps={_maps()}")
